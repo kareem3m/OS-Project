@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
  
+#define READY 0
+#define STARTED 1
+#define RESUMED 2
+#define STOPPED 3
+#define FINISHED 4
+
 // Data structure for queue
 struct processData
 {
@@ -8,6 +14,7 @@ struct processData
     int priority;
     int runningtime;
     int id;
+    int status;
 };
 struct queue
 {
