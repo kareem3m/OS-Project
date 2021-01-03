@@ -30,7 +30,7 @@ struct queue *readFile(struct queue *pt, char path[])
     }
     struct processData p;
     fclose(filePointer);
-    pt = newQueue((lines));
+    pt = newQueue((lines-1));
     filePointer = fopen(path, "r");
     fgets(buffer, bufferLength, filePointer);
     while (fgets(buffer, bufferLength, filePointer))
@@ -65,7 +65,7 @@ void down(int sem)
 
     if (semop(sem, &p_op, 1) == -1)
     {
-        //perror("Error in down()");
+        perror("Error in down()");
         //exit(-1);
     }
     else
@@ -84,7 +84,7 @@ void up(int sem)
 
     if (semop(sem, &v_op, 1) == -1)
     {
-        //perror("Error in up()");
+         perror("Error in up()");
         //exit(-1);
     }
 }
@@ -108,53 +108,30 @@ int main(int argc, char *argv[])
     printf("Please enter the quantum for RR or 0 if not:\n");
     scanf("%d", &quantam);
     printf("pid: %d\n", getpid());
-
-    //scheduler_id = fork();
-    //if (scheduler_id == -1)
-    //{
-    //    printf("There is an error while calling fork()");
-    //}
-    //if (scheduler_id == 0)
-    //{
-    //    printf("pid: %d ppid: %d\n", getpid(), getppid());
-    //    char *args[] = {"2", "C", "Programming", NULL};
-    //    int ret = execv("./scheduler", args);
-    //    printf("%d\n", ret);
-    //}
-    //else
-    //{
-    clk_id = fork();
-    if (clk_id == -1)
-    {
-        printf("There is an error while calling fork()");
-    }
-    if (clk_id == 0)
-    {
-        printf("pid: %d ppid: %d\n", getpid(), getppid());
-        char *args[] = {"clock", "C", "Programming", NULL};
-        execv("./clk", args);
-    }
-    //}
-    // 3. Initiate and create the scheduler and clock processes.
-    // 4. Use this function after creating the clock process to initialize clock
-    initClk();
-    // To get time use this
-    int x = getClk();
-    // TODO Generation Main Loop
-    // 5. Create a data structure for processes and provide it with its parameters.
-    // 6. Send the information to the scheduler at the appropriate time.
-    int shmid;
-    key_t key_id1, key_id2, key_id3, key_id4;
+    
+    int shmid, shmid2;
+    key_t key_id1, key_id2, key_id3, key_id4, key_id5;
     key_id2 = ftok("keyfile", 66);
     key_id4 = ftok("keyfile", 69);
+    key_id5 = ftok("keyfile", 70);
     shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
     struct processData *shmaddr = (struct processData *)shmat(shmid, (void *)0, 0);
+    
+    shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
+    
+    int *shmaddr2 = (int*)shmat(shmid2, (void *)0, 0);
+    
     if (shmaddr == -1)
     {
         perror("Error in attach in reader");
         exit(-1);
     }
 
+    if (shmaddr2 == -1)
+    {
+        perror("Error in attach in reader");
+        exit(-1);
+    }
     union Semun semun;
     key_id3 = ftok("keyfile", 67);
     key_id1 = ftok("keyfile", 68);
@@ -187,6 +164,41 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     printf("\nReader: Shared memory attached at address %d\n", scheduler_id);
+    scheduler_id = fork();
+    if (scheduler_id == -1)
+    {
+        printf("There is an error while calling fork()");
+    }
+    if (scheduler_id == 0)
+    {
+        printf("pid: %d ppid: %d\n", getpid(), getppid());
+        char *args[] = {"2", "C", "Programming", NULL};
+        int ret = execv("./RR", args);
+        printf("%d\n", ret);
+    }
+    else
+    {
+    clk_id = fork();
+    if (clk_id == -1)
+    {
+        printf("There is an error while calling fork()");
+    }
+    if (clk_id == 0)
+    {
+        printf("pid: %d ppid: %d\n", getpid(), getppid());
+        char *args[] = {"clock", "C", "Programming", NULL};
+        execv("./clk", args);
+    }
+    }
+    // 3. Initiate and create the scheduler and clock processes.
+    // 4. Use this function after creating the clock process to initialize clock
+    initClk();
+    // To get time use this
+    int x = getClk();
+    // TODO Generation Main Loop
+    // 5. Create a data structure for processes and provide it with its parameters.
+    // 6. Send the information to the scheduler at the appropriate time.
+    shmaddr2[0]=0;
     struct processData process;
     while (!isEmpty(pData))
     {
@@ -194,16 +206,17 @@ int main(int argc, char *argv[])
         process = front(pData);
         if (process.arrivaltime == x)
         {
+
+            shmaddr2[0]+=1;
             down(sem2);
             shmaddr[0] = process;
             printf("%d\n", shmaddr[0].arrivaltime);
             dequeue(pData);
-            up(sem1);
+            up(sem1);   
+
+   
         }
-        //else
-        //{
-        //    up(sem3);
-        //}
+
     }
     // 7. Clear clock resources
     destroyClk(true);
