@@ -13,8 +13,12 @@ struct processData
     int arrivaltime;
     int priority;
     int runningtime;
+    int remainingtime;
+    int wait;
     int id;
     int status;
+    int pid;
+    int last_run;
 };
 struct queue
 {

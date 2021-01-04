@@ -4,17 +4,9 @@
 #include <time.h>
 
 ///////////////////////////////
-struct msgbuff;
 /* arg for semctl system calls. */
-union Semun
-{
-    int val;               /* value for SETVAL */
-    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
-    ushort *array;         /* array for GETALL & SETALL */
-    struct seminfo *__buf; /* buffer for IPC_INFO */
-    void *__pad;
-};
-int quantum = 1;
+
+int quantum = 1;    
 int *shmaddr2;
 int sem1, sem2, sem3;
 void up(int sem)
@@ -47,8 +39,8 @@ void down(int sem)
     }
     else
     {
-        printf("down then up\n");
-        shmaddr2[0]-=1;
+        //printf("down then up\n");
+        shmaddr2[0] -= 1;
         up(sem2);
         //printf("\nData found = %s\n", (char *)shmaddr);
     }
@@ -57,37 +49,52 @@ void down(int sem)
 struct processData *shmaddrr;
 ////////////////////////////
 
-void start(struct processData *process);
-void resume(struct processData *process);
-void stop(struct processData *process);
-void check_for_new_process();
-void child_exit_handler(int signum);
-void sleep_a_quantum();
 
 
-struct queue *ready_queue;
+struct process
+{
+    struct processData data;
+    CIRCLEQ_ENTRY(process)
+    ptrs;
+};
+
+CIRCLEQ_HEAD(circlehead, process);
+struct circlehead *ready_queue;
+
+struct process *current_process = NULL;
+
+void schedule_processes();
+void start_process(struct process *process);
+void resume_process(struct process *process);
+void stop_process(struct process *p);
+void remove_process(struct process *p);
+void check_for_new_processes();
+void wait_next_clk();
+void log_status(struct process* p, char* status);
+
+FILE *logptr;
+
 
 int main(int argc, char *argv[])
 {
+    struct circlehead head;
+    CIRCLEQ_INIT(&head);
+    ready_queue = &head;
     //////////////////////////////////////
-    int shmid, shmid2;
-    key_t key_id1, key_id2, key_id3, key_id4, key_id, key_id5;
-    key_id2 = ftok("keyfile", 66);
-    key_id4 = ftok("keyfile", 69);
-    key_id5 = ftok("keyfile", 70);
-    shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
-    shmaddr = (struct processData *)shmat(shmid, (void *)0, 0);
-    shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
-    shmaddr2 = (int*)shmat(shmid2, (void *)0, 0);
-    if (shmaddr == -1)
+    key_t key_id1 = ftok("keyfile", 68);
+    key_t key_id2 = ftok("keyfile", 66);
+    key_t key_id3 = ftok("keyfile", 67);
+    key_t key_id4 = ftok("keyfile", 69);
+    key_t key_id5 = ftok("keyfile", 70);
+    int shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
+    shmaddrr = (struct processData *)shmat(shmid, (void *)0, 0);
+    int shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
+    shmaddr2 = (int *)shmat(shmid2, (void *)0, 0);
+    if (shmaddrr == (void *) -1)
     {
         perror("Error in attach in reader");
         exit(-1);
     }
-
-    union Semun semun;
-    key_id3 = ftok("keyfile", 67);
-    key_id1 = ftok("keyfile", 68);
 
     sem1 = semget(key_id3, 1, 0666 | IPC_CREAT);
     sem2 = semget(key_id1, 1, 0666 | IPC_CREAT);
@@ -99,121 +106,130 @@ int main(int argc, char *argv[])
     }
     /////////////////////////////////////
     quantum = 1; //atoi(argv[1]);
-    //signal(SIGCHLD, child_exit_handler);
 
     initClk();
 
-    struct queue *ready_queue = newQueue(100);
-
-    struct processData p1;
-    p1.id = -1;
-    p1.status = READY;
-    p1.runningtime = 10;
-    enqueue(ready_queue, p1);
-
-    struct processData p2;
-    p2.id = -1;
-    p2.status = READY;
-    p2.runningtime = 5;
-    enqueue(ready_queue, p2);
-
-    struct processData process;
     while (1)
     {
-        if (size(ready_queue) > 0)
+        check_for_new_processes();
+        if (!CIRCLEQ_EMPTY(ready_queue))
         {
-            check_for_new_process();
-
-            process = front(ready_queue);
-            dequeue(ready_queue);
-
-            if (process.status == READY)
+            if (current_process->data.status == READY)
             {
-                start(&process);
+                start_process(current_process);
             }
-            else if (process.status == STOPPED)
+            else if(current_process->data.status == STOPPED)
             {
-                resume(&process);
+                resume_process(current_process);
             }
 
-            sleep_a_quantum();
+            wait_next_clk();
+            stop_process(current_process);
 
-            stop(&process);
-
-            enqueue(ready_queue, process);
-        }
-        else
-        {
-            check_for_new_process();
-            sleep_a_quantum();
+            current_process = CIRCLEQ_LOOP_NEXT(ready_queue, current_process, ptrs);
         }
     }
 
     return 0;
 }
 
-void start(struct processData *process)
+
+void start_process(struct process *p)
 {
+    p->data.wait += getClk() - p->data.arrivaltime;
     int pid = fork();
     if (pid == 0)
     {
         char arg[10];
-        sprintf(arg, "%d", process->runningtime);
+        sprintf(arg, "%d", p->data.runningtime);
         int ret = execl("process", "process", arg, NULL);
         perror("Error in execl: ");
         exit(-1);
     }
     else
     {
-        process->id = pid;
-        process->status = STARTED;
-        printf("process %d running..\n", process->id);
-        fflush(stdout);
+        p->data.pid = pid;
+        p->data.status = STARTED;
+        log_status(p, "started");
     }
 }
 
-void resume(struct processData *process)
+void resume_process(struct process *p)
 {
-    kill(process->id, SIGCONT);
-    process->status = RESUMED;
-    printf("process %d resumed\n", process->id);
-    fflush(stdout);
-}
-
-void stop(struct processData *process)
-{
-    kill(process->id, SIGSTOP);
-    process->status = STOPPED;
-    printf("process %d stopped\n", process->id);
-    fflush(stdout);
-}
-
-void child_exit_handler(int signum)
-{
-    int pid = waitpid(-1, NULL, WNOHANG);
-    if (pid != 0 && pid != -1)
+    if (kill(p->data.pid, SIGCONT) == -1)
     {
-        printf("prcoess %d finished\n", pid);
-        fflush(stdout);
+        perror("Error in kill: ");
+        exit(-1);
     }
+    p->data.status = RESUMED;
+    p->data.wait += getClk() - p->data.last_run;
+    log_status(p, "resumed");
 }
 
-void check_for_new_process()
+void stop_process(struct process *p)
 {
-
-    while(shmaddr2[0]){
-         down(sem1);
-
+    if (kill(p->data.pid, SIGSTOP) == -1)
+    {
+        perror("Error in kill: ");
+        exit(-1);
     }
-   
+    p->data.status = STOPPED;
+    p->data.last_run = getClk();
+    p->data.remainingtime--;
 
+    if (p->data.remainingtime != 0)
+    {
+        log_status(p, "stopped");
+    }
+    else
+    {
+        log_status(p, "finished");
+        remove_process(p);
+    }
 }
 
-void sleep_a_quantum()
+void remove_process(struct process *p)
+{
+    current_process = CIRCLEQ_LOOP_NEXT(ready_queue, current_process, ptrs);
+    CIRCLEQ_REMOVE(ready_queue, p, ptrs);
+}
+
+void check_for_new_processes()
+{
+    while (shmaddr2[0])
+    {
+        struct process* p = (struct process *)malloc(sizeof(struct process));
+        p->data.id = shmaddrr->id;
+        p->data.arrivaltime = shmaddrr->arrivaltime;
+        p->data.last_run = getClk();
+        p->data.priority = shmaddrr->priority;
+        p->data.runningtime = shmaddrr->runningtime;
+        p->data.remainingtime = shmaddrr->runningtime;
+        p->data.status = READY;
+        p->data.wait = 0;
+        if(CIRCLEQ_EMPTY(ready_queue)){
+            CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
+            current_process = p;
+        }
+        else{
+            CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
+        }
+        printf("read a process \n");
+        fflush(stdout);
+        down(sem1);
+    }
+}
+
+void wait_next_clk()
 {
     int start = getClk();
-    while (getClk() - start < quantum)
-    {
-        sleep(quantum - (getClk() - start));
-    }
+    while (start == getClk())
+        ;
+}
+
+void log_status(struct process* p, char* status){
+    logptr = fopen("scheduler.log", "a");
+    int ret = fprintf(logptr, "At time %d process %d %s arr %d total %d remain %d wait %d\n", getClk(), p->data.id, status, p->data.arrivaltime, p->data.runningtime, p->data.remainingtime, p->data.wait);
+    fclose(logptr);
+    printf("writing to log %d\n", ret);
 }
