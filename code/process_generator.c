@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <string.h>
 
+void wait_next_clk();
 void clearResources(int);
 
 struct queue *readFile(struct queue *pt, char path[])
@@ -55,40 +56,6 @@ union Semun
     void *__pad;
 };
 
-void down(int sem)
-{
-    struct sembuf p_op;
-
-    p_op.sem_num = 0;
-    p_op.sem_op = -1;
-    p_op.sem_flg = !IPC_NOWAIT;
-
-    if (semop(sem, &p_op, 1) == -1)
-    {
-        perror("Error in down()");
-        //exit(-1);
-    }
-    else
-    {
-        //printf("\nData found = %s\n", (char *)shmaddr);
-    }
-}
-
-void up(int sem)
-{
-    struct sembuf v_op;
-
-    v_op.sem_num = 0;
-    v_op.sem_op = 1;
-    v_op.sem_flg = !IPC_NOWAIT;
-
-    if (semop(sem, &v_op, 1) == -1)
-    {
-        perror("Error in up()");
-        //exit(-1);
-    }
-}
-
 pid_t scheduler_id, clk_id;
 
 int main(int argc, char *argv[])
@@ -119,15 +86,15 @@ int main(int argc, char *argv[])
 
     shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
 
-    int *shmaddr2 = (int *)shmat(shmid2, (void *)0, 0);
+    int *count = (int *)shmat(shmid2, (void *)0, 0);
 
-    if (shmaddr == -1)
+    if (shmaddr == (void*)-1)
     {
         perror("Error in attach in reader");
         exit(-1);
     }
 
-    if (shmaddr2 == -1)
+    if (count == (void*)-1)
     {
         perror("Error in attach in reader");
         exit(-1);
@@ -151,7 +118,7 @@ int main(int argc, char *argv[])
         perror("Error in semctl");
         exit(-1);
     }
-    semun.val = 1; /* initial value of the semaphore, Binary semaphore */
+    semun.val = 0; /* initial value of the semaphore, Binary semaphore */
     if (semctl(sem2, 0, SETVAL, semun) == -1)
     {
         perror("Error in semctl");
@@ -198,27 +165,34 @@ int main(int argc, char *argv[])
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
-    shmaddr2[0] = 0;
-    struct processData process;
-    while (!isEmpty(pData))
+    
+    while (1)
     {
         x = getClk();
-        process = front(pData);
-        if (process.arrivaltime == x)
+        while (!isEmpty(pData) && front(pData).arrivaltime == x)
         {
-            printf("sending a process \n");
-            fflush(stdout);
-            shmaddr2[0] += 1;
-            down(sem2);
-            shmaddr[0] = process;
-            //printf("%d\n", shmaddr[0].arrivaltime);
-            dequeue(pData);
+            *shmaddr = front(pData);
             up(sem1);
+            down(sem2);
+            dequeue(pData);
         }
+        
+        shmaddr->id = -1;
+        up(sem1);
+        down(sem2);
+
+        wait_next_clk();
     }
-    pause();
+    
     // 7. Clear clock resources
     destroyClk(true);
+}
+
+void wait_next_clk()
+{
+    int start = getClk();
+    while (start == getClk())
+        ;
 }
 
 void clearResources(int signum)
