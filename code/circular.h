@@ -19,6 +19,8 @@ struct processData
     int status;
     int pid;
     int last_run;
+    int responsetime;
+    struct processData* Next;
 };
 struct queue
 {
