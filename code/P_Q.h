@@ -14,26 +14,29 @@
 //     int last_run;
 //     struct processData* Next;
 // };
- struct processData* New_Process(int arrivaltime,int priority,int runningtime,int remainingtime,int wait,int id,int status,int pid,int last_run) 
+ struct processData* New_Process(int arrivaltime,int priority,int runningtime,int id) 
 { 
 	struct processData* temp = (struct processData*)malloc(sizeof(struct processData)); 
 	temp->arrivaltime = arrivaltime; 
 	temp->priority = priority; 
     temp->runningtime =runningtime;
-    temp->remainingtime =remainingtime;
-    temp-> wait=wait;
+    temp->remainingtime =runningtime;
+    temp-> wait=0;
     temp-> id=id;
-    temp-> status=status;
-    temp->pid =pid;
-    temp-> last_run=last_run;
+    temp-> status=READY;
+    temp->pid =0;
+    temp-> last_run=0;
 	temp->Next = NULL; 
 	return temp; 
 } 
-void Dequeue(struct processData** head) 
+struct processData* Dequeue(struct processData** head) 
 { 
 	struct processData* temp = (*head);  //assignmemt operator
+	// struct processData* temp_l = temp;
 	(*head) = (*head)->Next; 
-	free(temp); 
+	//free(temp);
+	 return temp;
+
 }
 void Enqueue(struct processData** head,struct processData** process) 
 { 
@@ -72,3 +75,12 @@ int Is_Empty(struct processData** head)
 { 
 	return (*head) == NULL; 
 } 
+// void Dequeue(struct processData** head) 
+// { 
+// 	struct processData* temp = (*head);  //assignmemt operator
+// 	// struct processData* temp_l = temp;
+// 	(*head) = (*head)->Next; 
+// 	free(temp);
+// 	 //return temp;
+
+// }
