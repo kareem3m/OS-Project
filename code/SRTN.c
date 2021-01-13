@@ -8,13 +8,15 @@ struct processData *shmaddrr;
 void start_process(struct processData *process);
 void check_for_new_processes();
 void wait_next_clk();
+void resume_process(struct processData *p);
+void stop_process(struct processData *p);
 void remove_process(struct processData *p);
 void log_status(struct processData *p, char *status);
 FILE *logptr;
 
 struct processData* Head;
 struct processData* Current_Process;
-
+bool Finished_Processes=false;
 int main(int argc, char *argv[])
     {
         key_t key_id1 = ftok("keyfile", 68);
@@ -25,9 +27,9 @@ int main(int argc, char *argv[])
         int shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
         shmaddrr = (struct processData *)shmat(shmid, (void *)0, 0);
 
-        Head=(struct processData*)malloc(sizeof(struct processData));
-        Current_Process=(struct processData*)malloc(sizeof(struct processData));
-        Current_Process=NULL;
+        Head=New_Process(0,0,0,0);
+        Current_Process=New_Process(0,0,0,0);
+        //Current_Process=NULL;
 
         if (shmaddrr == (void *)-1)
         {
@@ -47,27 +49,35 @@ int main(int argc, char *argv[])
         initClk();
         while (1)
         {
-            check_for_new_processes();
-            if (!Is_Empty(&Head))
-            {
-                if (Current_Process != Head)
+            if(Finished_Processes==false)
                 {
-                    start_process(Head);
-                }
-                else if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime!=0){
-                    Current_Process->remainingtime--;
-                }
-                else if(Current_Process->status == STOPPED && Current_Process->remainingtime!=0){
-                    resume_process(Current_Process)
-                    Current_Process->remainingtime--;
+                check_for_new_processes();
                 }
 
-                wait_next_clk();
-                if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime==0)
-                {
-                    remove_process(Current_Process);
-                }
-                
+            if (Current_Process->priority == 0 && Head->priority != 0)
+            {
+                start_process(Head);
+            }
+            else if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime!=0){
+                Current_Process->remainingtime--;
+                Current_Process->priority--;
+            }
+            else if(Current_Process->status == STOPPED && Current_Process->remainingtime!=0){
+                resume_process(Current_Process);
+                Current_Process->remainingtime--;
+                Current_Process->priority--;
+            }
+
+            
+            if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime==0)
+            {
+                remove_process(Current_Process);
+            }
+            wait_next_clk();
+            if(Finished_Processes==true &&Head->priority==0&&Current_Process->priority==0)
+            {
+                    printf("5ls");
+                    exit(0);
             }
         }
 
@@ -76,8 +86,16 @@ int main(int argc, char *argv[])
 
 void start_process(struct processData *pr)
 {
-    Current_Process=pr;
+    Current_Process->id=pr->id;
+    Current_Process->priority=pr->remainingtime;
+    Current_Process->arrivaltime=pr->arrivaltime;
+    Current_Process->runningtime=pr->runningtime;
+    Current_Process->remainingtime=pr->remainingtime;
     Dequeue(&pr);
+    if(Is_Empty(&Head)){
+        Head=New_Process(0,0,0,0);
+    }
+
     Current_Process->wait += getClk() - Current_Process->arrivaltime;
     int pid = fork();
     if (pid == 0)
@@ -143,7 +161,7 @@ void remove_process(struct processData *Pr)
     printf("%d in delation\n",Pr->priority);
     //Dequeue(&Pr);
     free(Current_Process);
-    Current_Process=NULL;
+    Current_Process=New_Process(0,0,0,0);
     //free(temp);
 }
 void check_for_new_processes()
@@ -153,7 +171,15 @@ void check_for_new_processes()
         down(sem1);
         printf("HPF: downed sem1\n");
         fflush(stdout);
-        struct processData *pr = (struct process *)malloc(sizeof(struct processData));
+        struct processData *pr = (struct processData *)malloc(sizeof(struct processData));
+        if (shmaddrr->id == -2)
+        {
+            up(sem2);
+            printf("HPF: upped sem2\n");
+            fflush(stdout);
+            Finished_Processes=true;
+            return;
+        }
         if (shmaddrr->id == -1)
         {
             up(sem2);
@@ -161,15 +187,27 @@ void check_for_new_processes()
             fflush(stdout);
             return;
         }
-        if(Current_Process != NULL)
+        if(Head->priority == 0)
         {
-            stop_process(Current_Process);
-            Current_Process->priority = Current_Process->remainingtime;
-            Enqueue(&Head,&Current_Process);
+            Head = New_Process(shmaddrr->arrivaltime,shmaddrr->runningtime,shmaddrr->runningtime,shmaddrr->id);
+        }
+        else
+        {
+            pr=New_Process(shmaddrr->arrivaltime,shmaddrr->runningtime,shmaddrr->runningtime,shmaddrr->id);
+            Enqueue(&Head,&pr);
         }
         
-        pr=New_Process(shmaddrr->arrivaltime,shmaddrr->priority,shmaddrr->runningtime,shmaddrr->id);
-        Enqueue(&Head,&pr);
+        if(Head->priority < Current_Process->priority)
+        {
+            stop_process(Current_Process);
+            if(Current_Process->remainingtime != 0)
+            {
+                Current_Process->priority = Current_Process->remainingtime;
+                Enqueue(&Head,&Current_Process);
+            }    
+            Current_Process=New_Process(0,0,0,0);
+        }
+
         printf("%d in creation\n",Head->priority);
         up(sem2);
         printf("HPF: upped sem2\n");

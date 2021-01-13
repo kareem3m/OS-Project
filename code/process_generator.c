@@ -138,9 +138,21 @@ int main(int argc, char *argv[])
     }
     if (scheduler_id == 0)
     {
+        int ret;
         printf("pid: %d ppid: %d\n", getpid(), getppid());
         char *args[] = {"2", "C", "Programming", NULL};
-        int ret = execv("./RR", args);
+        if(schedulingAlgorithm==1)
+        {
+         ret = execv("./HPF", args);
+        }
+        else if(schedulingAlgorithm==2)
+        {
+         ret = execv("./SRTN", args);
+        }
+        else
+        {
+         ret = execv("./RR", args);
+        }
         printf("%d\n", ret);
     }
     else
@@ -176,15 +188,22 @@ int main(int argc, char *argv[])
             down(sem2);
             dequeue(pData);
         }
-        
+        if(isEmpty(pData)){
+            shmaddr->id = -2;
+            up(sem1);
+            down(sem2);
+            break;
+        }
+        else{ 
         shmaddr->id = -1;
         up(sem1);
         down(sem2);
-
+        }
         wait_next_clk();
     }
     
     // 7. Clear clock resources
+    waitpid(scheduler_id,NULL, 0);
     destroyClk(true);
 }
 
