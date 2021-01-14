@@ -59,18 +59,19 @@ int main(int argc, char *argv[])
                 if (Current_Process->priority == 0 && Head->priority!=0)
                 {
                     start_process(Head);
+                    Current_Process->remainingtime--;
                     
                 }
-                if(Current_Process->status == STARTED&&Current_Process->remainingtime>0){
+                else if(Current_Process->status == STARTED&&Current_Process->remainingtime>0){
                     Current_Process->remainingtime--;
                     printf("remaningtime %d ",Current_Process->remainingtime);
                 }
-                
-                else if(Current_Process->status == STARTED&&Current_Process->remainingtime==0)
+                wait_next_clk();
+                if(Current_Process->status == STARTED&&Current_Process->remainingtime==0)
                 {
                     remove_process(Current_Process);
                 }
-                wait_next_clk();
+                
                 if(Finished_Processes==true &&Head->priority==0&&Current_Process->priority==0){
                     printf("5ls");
                     exit(0);
