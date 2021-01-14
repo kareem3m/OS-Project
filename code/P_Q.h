@@ -29,15 +29,15 @@
 	temp->Next = NULL; 
 	return temp; 
 } 
-struct processData* Dequeue(struct processData** head) 
-{ 
-	struct processData* temp = (*head);  //assignmemt operator
-	// struct processData* temp_l = temp;
-	(*head) = (*head)->Next; 
-	//free(temp);
-	 return temp;
+// struct processData* Dequeue(struct processData** head) 
+// { 
+// 	struct processData* temp = (*head);  //assignmemt operator
+// 	// struct processData* temp_l = temp;
+// 	(*head) = (*head)->Next; 
+// 	//free(temp);
+// 	 return temp;
 
-}
+// }
 void Enqueue(struct processData** head,struct processData** process) 
 { 
 	struct processData* start = (*head); 
@@ -75,12 +75,12 @@ int Is_Empty(struct processData** head)
 { 
 	return (*head) == NULL; 
 } 
-// void Dequeue(struct processData** head) 
-// { 
-// 	struct processData* temp = (*head);  //assignmemt operator
-// 	// struct processData* temp_l = temp;
-// 	(*head) = (*head)->Next; 
-// 	free(temp);
-// 	 //return temp;
+void Dequeue(struct processData** head) 
+{ 
+	struct processData* temp = (*head);  //assignmemt operator
+	// struct processData* temp_l = temp;
+	(*head) = (*head)->Next; 
+	free(temp);
+	 //return temp;
 
-// }
+}
