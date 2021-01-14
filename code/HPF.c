@@ -93,6 +93,7 @@ void start_process(struct processData *pr)
     printf("%d %d %d %d %d",pr->id,pr->priority,pr->remainingtime,pr->arrivaltime,pr->status);
     //Current_Process=Dequeue(&pr);
     Dequeue(&pr);
+    Head = *&pr;
     if(Is_Empty(&Head)){
         Head=New_Process(0,0,0,0);
     }
@@ -139,10 +140,11 @@ void check_for_new_processes()
 {
     while (1)
     {
+        ///enbehar 
         down(sem1);
         printf("HPF: downed sem1\n");
         fflush(stdout);
-        struct processData *pr = (struct process *)malloc(sizeof(struct processData));
+        struct processData *pr = (struct processData *)malloc(sizeof(struct processData));
          if (shmaddrr->id == -2)
         {
             up(sem2);

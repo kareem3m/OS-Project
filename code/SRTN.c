@@ -61,7 +61,6 @@ int main(int argc, char *argv[])
                 Current_Process->priority--;
             }
             else if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime!=0){
-                fflush(stdout);
                 Current_Process->remainingtime--;
                 Current_Process->priority--;
             }
@@ -76,7 +75,6 @@ int main(int argc, char *argv[])
             wait_next_clk();
             if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime==0)
             {
-                fflush(stdout);
                 remove_process(Current_Process);
                 printf("Finished_Processes %d Head->priority %d Current_Process->priority %d \n",Finished_Processes,Head->priority,Current_Process->priority);
                 fflush(stdout);
@@ -100,17 +98,13 @@ void start_process(struct processData *pr)
     Current_Process->arrivaltime=pr->arrivaltime;
     Current_Process->runningtime=pr->runningtime;
     Current_Process->remainingtime=pr->remainingtime;
+    Current_Process->last_run=pr->last_run;
+    Current_Process->pid=pr->pid;
+    Current_Process->status=pr->status;
+   // Current_Process = &pr;
     Dequeue(&pr);
-    if(!Is_Empty(&pr)){
-    Head->id=pr->id;
-    Head->priority=pr->remainingtime;
-    Head->arrivaltime=pr->arrivaltime;
-    Head->runningtime=pr->runningtime;
-    Head->remainingtime=pr->remainingtime;
-    Head->status=pr->status;
-    Head->pid=pr->pid;
-    }
-    printf(" after deque head priority %d  Head status %d \n",Head->priority,Head->status);
+    Head = *&pr;
+
     if(Is_Empty(&Head)){
         Head=New_Process(0,0,0,0);
     }
@@ -142,20 +136,12 @@ void resume_process(struct processData *p)
     Current_Process->remainingtime=p->remainingtime;
     Current_Process->last_run=p->last_run;
     Current_Process->pid=p->pid;
+    Current_Process->status=p->status;
+    //Current_Process = &p;
     Dequeue(&p);
-    if(p->id!=Current_Process->id)
-    {
-        printf("head priority in resume and not empty %d \n",Head->priority);
-        fflush(stdout);
-        Head->id=p->id;
-        Head->priority=p->remainingtime;
-        Head->arrivaltime=p->arrivaltime;
-        Head->runningtime=p->runningtime;
-        Head->remainingtime=p->remainingtime;
-        Head->status=p->status;
-        Head->pid=p->pid;
-    }
-    else
+    Head = *&p;
+    
+    if(Is_Empty(&Head))
     {
         Head=New_Process(0,0,0,0);
         printf("head priority in resume empty %d \n",Head->priority);
@@ -201,7 +187,7 @@ void remove_process(struct processData *Pr)
         perror("Error in kill: ");
         exit(-1);
     }
-    printf("batee5 fl remove\n");
+    //printf("batee5 fl remove\n");
     Pr->status = FINISHED;
     Pr->last_run = getClk(); 
     log_status(Pr, "finished");
@@ -209,7 +195,7 @@ void remove_process(struct processData *Pr)
     //Dequeue(&Pr);
     free(Current_Process); 
     Current_Process=New_Process(0,0,0,0);
-    printf("batee5 fl remove\n");
+    
     fflush(stdout);
     //free(temp);
 }
