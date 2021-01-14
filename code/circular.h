@@ -6,6 +6,7 @@
 #define RESUMED 2
 #define STOPPED 3
 #define FINISHED 4
+#define RUNNING 5
 
 // Data structure for queue
 struct processData

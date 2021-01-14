@@ -39,6 +39,7 @@ int main(int argc, char * argv[])
     *shmaddr = clk; /* initialize shared memory */
     while (1)
     {
+        kill(getppid(), SIGUSR1);
         sleep(1);
         (*shmaddr)++;
     }

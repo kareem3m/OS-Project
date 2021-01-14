@@ -3,14 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/queue.h>
-#include "circular.h"
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <signal.h>
 #include <string.h>
 
-void wait_next_clk();
 void clearResources(int);
+void on_clock_tick(int signum);
 
 struct queue *readFile(struct queue *pt, char path[])
 {
@@ -58,12 +57,14 @@ union Semun
 
 pid_t scheduler_id, clk_id;
 
+struct queue *pData;
+
 int main(int argc, char *argv[])
 {
+    signal(SIGUSR1, on_clock_tick);
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
-    struct queue *pData;
     char path[] = "processes.txt";
 
     pData = readFile(pData, path);
@@ -76,41 +77,9 @@ int main(int argc, char *argv[])
     scanf("%d", &quantam);
     printf("pid: %d\n", getpid());
 
-    int shmid, shmid2;
-    key_t key_id1, key_id2, key_id3, key_id4, key_id5;
-    key_id2 = ftok("keyfile", 66);
-    key_id4 = ftok("keyfile", 69);
-    key_id5 = ftok("keyfile", 70);
-    shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
-    struct processData *shmaddr = (struct processData *)shmat(shmid, (void *)0, 0);
+    initialize_ipc();
 
-    shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
-
-    int *count = (int *)shmat(shmid2, (void *)0, 0);
-
-    if (shmaddr == (void*)-1)
-    {
-        perror("Error in attach in reader");
-        exit(-1);
-    }
-
-    if (count == (void*)-1)
-    {
-        perror("Error in attach in reader");
-        exit(-1);
-    }
     union Semun semun;
-    key_id3 = ftok("keyfile", 67);
-    key_id1 = ftok("keyfile", 68);
-
-    int sem1 = semget(key_id3, 1, 0666 | IPC_CREAT);
-    int sem2 = semget(key_id1, 1, 0666 | IPC_CREAT);
-    int sem3 = semget(key_id4, 1, 0666 | IPC_CREAT);
-    if (sem1 == -1 || sem2 == -1 || sem3 == -1)
-    {
-        perror("Error in create sem");
-        exit(-1);
-    }
 
     semun.val = 0; /* initial value of the semaphore, Binary semaphore */
     if (semctl(sem1, 0, SETVAL, semun) == -1)
@@ -124,13 +93,27 @@ int main(int argc, char *argv[])
         perror("Error in semctl");
         exit(-1);
     }
-    semun.val = 0; /* initial value of the semaphore, Binary semaphore */
-    if (semctl(sem3, 0, SETVAL, semun) == -1)
+    semun.val = 0;
+    if (semctl(scheduler_ready, 0, SETVAL, semun) == -1)
     {
         perror("Error in semctl");
         exit(-1);
     }
+    semun.val = 0;
+    if (semctl(sem1_process, 0, SETVAL, semun) == -1)
+    {
+        perror("Error in semctl");
+        exit(-1);
+    }
+    semun.val = 0;
+    if (semctl(sem2_process, 0, SETVAL, semun) == -1)
+    {
+        perror("Error in semctl");
+        exit(-1);
+    }
+
     printf("\nReader: Shared memory attached at address %d\n", scheduler_id);
+
     scheduler_id = fork();
     if (scheduler_id == -1)
     {
@@ -145,6 +128,7 @@ int main(int argc, char *argv[])
     }
     else
     {
+        down(scheduler_ready);
         clk_id = fork();
         if (clk_id == -1)
         {
@@ -165,34 +149,32 @@ int main(int argc, char *argv[])
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
-    
+
+   // on_clock_tick(SIGUSR1); // intial call at T = 0, later on the clock will be triggering it every sec
+
     while (1)
     {
-        x = getClk();
-        while (!isEmpty(pData) && front(pData).arrivaltime == x)
-        {
-            *shmaddr = front(pData);
-            up(sem1);
-            down(sem2);
-            dequeue(pData);
-        }
-        
-        shmaddr->id = -1;
-        up(sem1);
-        down(sem2);
-
-        wait_next_clk();
+        pause();
     }
-    
+
     // 7. Clear clock resources
     destroyClk(true);
 }
 
-void wait_next_clk()
+void on_clock_tick(int signum)
 {
-    int start = getClk();
-    while (start == getClk())
-        ;
+    initClk();
+    while (!isEmpty(pData) && front(pData).arrivaltime == getClk())
+    {
+        *shmaddr_pg = front(pData);
+        up(sem1);
+        down(sem2);
+        dequeue(pData);
+    }
+
+    shmaddr_pg->id = -1;
+    up(sem1);
+    down(sem2);
 }
 
 void clearResources(int signum)
