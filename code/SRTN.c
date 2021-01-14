@@ -54,31 +54,40 @@ int main(int argc, char *argv[])
                 check_for_new_processes();
                 }
 
-            if (Current_Process->priority == 0 && Head->priority != 0)
+            if (Current_Process->priority == 0 && Head->priority != 0&&Head->status==READY)
             {
                 start_process(Head);
-            }
-            else if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime!=0){
                 Current_Process->remainingtime--;
                 Current_Process->priority--;
             }
-            else if(Current_Process->status == STOPPED && Current_Process->remainingtime!=0){
-                resume_process(Current_Process);
+            else if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime!=0){
+                fflush(stdout);
+                Current_Process->remainingtime--;
+                Current_Process->priority--;
+            }
+            else if(Head->status == STOPPED && Head->remainingtime!=0){
+                printf("here \n");
+                fflush(stdout);
+                resume_process(Head);
                 Current_Process->remainingtime--;
                 Current_Process->priority--;
             }
 
-            
+            wait_next_clk();
             if((Current_Process->status == STARTED || Current_Process->status == RESUMED ) && Current_Process->remainingtime==0)
             {
+                fflush(stdout);
                 remove_process(Current_Process);
+                printf("Finished_Processes %d Head->priority %d Current_Process->priority %d \n",Finished_Processes,Head->priority,Current_Process->priority);
+                fflush(stdout);
             }
-            wait_next_clk();
+
             if(Finished_Processes==true &&Head->priority==0&&Current_Process->priority==0)
             {
                     printf("5ls");
                     exit(0);
             }
+            
         }
 
         return 0;
@@ -92,6 +101,16 @@ void start_process(struct processData *pr)
     Current_Process->runningtime=pr->runningtime;
     Current_Process->remainingtime=pr->remainingtime;
     Dequeue(&pr);
+    if(!Is_Empty(&pr)){
+    Head->id=pr->id;
+    Head->priority=pr->remainingtime;
+    Head->arrivaltime=pr->arrivaltime;
+    Head->runningtime=pr->runningtime;
+    Head->remainingtime=pr->remainingtime;
+    Head->status=pr->status;
+    Head->pid=pr->pid;
+    }
+    printf(" after deque head priority %d  Head status %d \n",Head->priority,Head->status);
     if(Is_Empty(&Head)){
         Head=New_Process(0,0,0,0);
     }
@@ -115,15 +134,42 @@ void start_process(struct processData *pr)
 }
 
 void resume_process(struct processData *p)
-{
-    if (kill(p->pid, SIGCONT) == -1)
+{   
+    Current_Process->id=p->id;
+    Current_Process->priority=p->remainingtime;
+    Current_Process->arrivaltime=p->arrivaltime;
+    Current_Process->runningtime=p->runningtime;
+    Current_Process->remainingtime=p->remainingtime;
+    Current_Process->last_run=p->last_run;
+    Current_Process->pid=p->pid;
+    Dequeue(&p);
+    if(p->id!=Current_Process->id)
+    {
+        printf("head priority in resume and not empty %d \n",Head->priority);
+        fflush(stdout);
+        Head->id=p->id;
+        Head->priority=p->remainingtime;
+        Head->arrivaltime=p->arrivaltime;
+        Head->runningtime=p->runningtime;
+        Head->remainingtime=p->remainingtime;
+        Head->status=p->status;
+        Head->pid=p->pid;
+    }
+    else
+    {
+        Head=New_Process(0,0,0,0);
+        printf("head priority in resume empty %d \n",Head->priority);
+        fflush(stdout);
+    }
+    if (kill(Current_Process->pid, SIGCONT) == -1)
     {
         perror("Error in kill: ");
         exit(-1);
     }
-    p->status = RESUMED;
-    p->wait += getClk() - p->last_run;
-    log_status(p, "resumed");
+
+    Current_Process->status = RESUMED;
+    Current_Process->wait += getClk() - Current_Process->last_run;
+    log_status(Current_Process, "resumed");
 }
 
 void stop_process(struct processData *p)
@@ -155,13 +201,16 @@ void remove_process(struct processData *Pr)
         perror("Error in kill: ");
         exit(-1);
     }
+    printf("batee5 fl remove\n");
     Pr->status = FINISHED;
     Pr->last_run = getClk(); 
     log_status(Pr, "finished");
     printf("%d in delation\n",Pr->priority);
     //Dequeue(&Pr);
-    free(Current_Process);
+    free(Current_Process); 
     Current_Process=New_Process(0,0,0,0);
+    printf("batee5 fl remove\n");
+    fflush(stdout);
     //free(temp);
 }
 void check_for_new_processes()
@@ -199,11 +248,21 @@ void check_for_new_processes()
         
         if(Head->priority < Current_Process->priority)
         {
+
+            // printf("current status %d \n",Current_Process->status);
             stop_process(Current_Process);
+            // printf("current status %d current remaning time %d \n",Current_Process->status,Current_Process->remainingtime);
+            // fflush(stdout);
             if(Current_Process->remainingtime != 0)
             {
+                printf("current status %d current remaning time %d \n",Current_Process->status,Current_Process->remainingtime);
+                fflush(stdout);
                 Current_Process->priority = Current_Process->remainingtime;
                 Enqueue(&Head,&Current_Process);
+                printf("Head status %dHead remaning time %d \n",Head->status,Head->remainingtime);
+                fflush(stdout);
+                printf("Next status %d Next remaning time %d \n",Head->Next->status,Head->Next->priority);
+                fflush(stdout);
             }    
             Current_Process=New_Process(0,0,0,0);
         }
