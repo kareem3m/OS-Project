@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include "circular.h"
+#include <math.h>
+#include <time.h>
 
 typedef short bool;
 #define true 1
@@ -32,17 +34,19 @@ int getClk()
  * All process call this function at the beginning to establish communication between them and the clock module.
  * Again, remember that the clock is only emulation!
 */
+
+int shmid_clk;
 void initClk()
 {
-    int shmid = shmget(SHKEY, 4, 0444);
-    while ((int)shmid == -1)
+    shmid_clk = shmget(SHKEY, 4, 0444);
+    while ((int)shmid_clk == -1)
     {
         //Make sure that the clock exists
         printf("%d: Wait! The clock not initialized yet!\n", getpid());
-        sleep(1);
-        shmid = shmget(SHKEY, 4, 0444);
+        usleep(250000);
+        shmid_clk = shmget(SHKEY, 4, 0444);
     }
-    shmaddr = (int *)shmat(shmid, (void *)0, 0);
+    shmaddr = (int *)shmat(shmid_clk, (void *)0, 0);
 }
 
 /*
@@ -63,7 +67,7 @@ void destroyClk(bool terminateAll)
 }
 
 int sem1, sem2, scheduler_ready, sem1_process, sem2_process;
-
+int shmid_pg;
 struct processData *shmaddr_pg;
 
 void initialize_ipc()
@@ -77,8 +81,8 @@ void initialize_ipc()
     key_t key_id11 = ftok("keyfile", 91);
     key_t key_id12 = ftok("keyfile", 92);
 
-    int shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
-    shmaddr_pg = (struct processData *)shmat(shmid, (void *)0, 0);
+    shmid_pg = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
+    shmaddr_pg = (struct processData *)shmat(shmid_pg, (void *)0, 0);
 
     if (shmaddr_pg == (void *)-1)
     {
@@ -98,6 +102,20 @@ void initialize_ipc()
         perror("Error in create sem");
         exit(-1);
     }
+}
+
+void remove_ipc()
+{
+    shmdt(shmaddr);
+    shmdt(shmaddr_pg);
+    shmctl(shmid_clk, IPC_RMID, (struct shmid_ds *)0);
+    shmctl(shmid_pg, IPC_RMID, (struct shmid_ds *)0);
+
+    semctl(sem1, 0, IPC_RMID);
+    semctl(sem2, 0, IPC_RMID);
+    semctl(sem1_process, 0, IPC_RMID);
+    semctl(sem2_process, 0, IPC_RMID);
+    semctl(scheduler_ready, 0, IPC_RMID);
 }
 
 void up(int sem)
@@ -132,4 +150,88 @@ void down(int sem)
         perror("Error in down()");
         //exit(-1);
     }
+}
+
+char* getRealTime() // For debugging purposes..
+{
+    long ms;  // Milliseconds
+    time_t s; // Seconds
+    struct timespec spec;
+
+    clock_gettime(CLOCK_REALTIME, &spec);
+
+    s = spec.tv_sec;
+    ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
+    if (ms > 999)
+    {
+        s++;
+        ms = 0;
+    }
+    char* time = (char*)malloc(10);
+    sprintf(time, "%lds %ldms", s, ms);
+    return time;
+}
+
+// schedulers common
+
+float wta[1000];
+float waitsum = 0;
+int n = -1;
+float useful_seconds = 0;
+
+FILE *logptr;
+void log_status(struct processData *p, char *status)
+{
+    logptr = fopen("scheduler.log", "a");
+
+    int ret = fprintf(logptr, "At time %d process %d %s arr %d total %d remain %d wait %d", getClk(), p->id, status, p->arrivaltime, p->runningtime, p->remainingtime, p->wait);
+
+    if (p->status == FINISHED)
+    {
+        float TA = getClk() - p->arrivaltime;
+        float WTA = TA / p->runningtime;
+        fprintf(logptr, " TA = %d WTA %.2f \n", (int)TA, WTA);
+        n++;
+        wta[n] = WTA;
+        waitsum += p->wait;
+    }
+    else
+    {
+        fprintf(logptr, "\n");
+    }
+    fflush(NULL);
+    fclose(logptr);
+}
+
+float wtasum()
+{
+    float sum = 0;
+    for (int i = 0; i <= n; i++)
+    {
+        sum += wta[i];
+    }
+    return sum;
+}
+
+float stdWTA()
+{
+    float mean = wtasum() / (n + 1);
+    float sum = 0;
+    for (int i = 0; i <= n; i++)
+    {
+        sum += (wta[i] - mean) * (wta[i] - mean);
+    }
+    return sqrt(sum);
+}
+
+void generate_perf_file()
+{
+    FILE *fptr = fopen("scheduler.perf", "w+");
+    float cpu_util = useful_seconds * 100 / getClk();
+    fprintf(fptr, "CPU utilization = %.2f%%\n", cpu_util);
+    fprintf(fptr, "Avg WTA = %.2f\n", wtasum() / (n + 1));
+    fprintf(fptr, "Avg Waiting = %.2f\n", waitsum / (n + 1));
+    fprintf(fptr, "Std WTA = %.2f", stdWTA());
+    //printf("n = %d\n", n);
+    fclose(fptr);
 }

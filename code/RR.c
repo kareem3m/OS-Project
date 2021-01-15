@@ -21,13 +21,12 @@ void resume_process(struct process *process);
 void stop_process(struct process *p);
 void remove_process(struct process *p);
 void get_new_processes();
-void log_status(struct process *p, char *status);
 void wait_on_process(struct process *p);
 
 int quantum = 1;
 int remaining_quantum_time = 1;
 int ready_queue_size = 0;
-
+bool no_more_new_processes = false;
 
 
 int main(int argc, char *argv[])
@@ -37,26 +36,30 @@ int main(int argc, char *argv[])
     CIRCLEQ_INIT(&head);
     ready_queue = &head;
 
-    quantum = 1; //atoi(argv[1]);
+    quantum = atoi(argv[1]);
     remaining_quantum_time = quantum;
-
-    up(scheduler_ready);
 
     initClk();
 
     while (1)
     {
-
         if (ready_queue_size > 0)
         {
             schedule_process();
         }
+        else if (no_more_new_processes)
+        {
+            break;
+        }
         else
         {
+            printf("at T = %d getting new processes\n", getClk());
+            fflush(stdout);
             get_new_processes();
         }
     }
 
+    generate_perf_file();
     return 0;
 }
 
@@ -66,7 +69,6 @@ void schedule_process()
 
     int status = current_process->data.status;
 
-    printf("T = %d , current process = %d\n", getClk(), current_process->data.id);
     if (status == READY)
     {
         start_process(current_process);
@@ -76,11 +78,12 @@ void schedule_process()
         resume_process(current_process);
     }
 
+    useful_seconds++;
     down(sem1_process);
 
     current_process->data.remainingtime--;
 
-    get_new_processes();
+    no_more_new_processes ? 0 : get_new_processes();
 
     if (current_process->data.remainingtime == 0)
     {
@@ -107,7 +110,6 @@ void schedule_process()
 
 void start_process(struct process *p)
 {
-    printf("starting process %d\n", p->data.id);
     p->data.wait += getClk() - p->data.arrivaltime;
     int pid = fork();
     if (pid == 0)
@@ -122,7 +124,7 @@ void start_process(struct process *p)
     {
         p->data.pid = pid;
         p->data.status = RUNNING;
-        log_status(p, "started");
+        log_status(&(p->data), "started");
     }
 }
 
@@ -152,6 +154,7 @@ void remove_process(struct process *p)
 {
     printf("removing process %d\n", p->data.id);
     fflush(stdout);
+    p->data.status = FINISHED;
     wait_on_process(p);
     if (ready_queue_size > 1)
     {
@@ -176,6 +179,12 @@ void get_new_processes()
             up(sem2);
             return;
         }
+        else if (shmaddr_pg->id == -2)
+        {
+            no_more_new_processes = true;
+            up(sem2);
+            return;
+        }
 
         p->data.id = shmaddr_pg->id;
         p->data.arrivaltime = shmaddr_pg->arrivaltime;
@@ -186,12 +195,11 @@ void get_new_processes()
         p->data.status = READY;
         p->data.wait = 0;
 
-
         if (CIRCLEQ_EMPTY(ready_queue))
         {
             CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
             current_process = p;
-            printf("at T = %d process %d arrived\n", getClk(), p->data.id);
+            printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), p->data.id);
             fflush(stdout);
         }
         else
@@ -203,8 +211,6 @@ void get_new_processes()
 
         ready_queue_size += 1;
         up(sem2);
-        printf("RR: upped sem2\n");
-        fflush(stdout);
     }
 }
 
@@ -228,14 +234,6 @@ void wait_on_process(struct process *p)
         printf(status, "%d", siginfo.si_code);
         break;
     }
-    log_status(p, status);
+    log_status(&(p->data), status);
 }
 
-FILE *logptr;
-void log_status(struct process *p, char *status)
-{
-    logptr = fopen("scheduler.log", "a");
-    int ret = fprintf(logptr, "At time %d process %d %s arr %d total %d remain %d wait %d\n", getClk(), p->data.id, status, p->data.arrivaltime, p->data.runningtime, p->data.remainingtime, p->data.wait);
-    fflush(NULL);
-    fclose(logptr);
-}

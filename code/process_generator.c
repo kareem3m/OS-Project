@@ -57,6 +57,8 @@ union Semun
 
 pid_t scheduler_id, clk_id;
 
+bool end = false;
+
 struct queue *pData;
 
 int main(int argc, char *argv[])
@@ -121,14 +123,27 @@ int main(int argc, char *argv[])
     }
     if (scheduler_id == 0)
     {
+        int ret;
         printf("pid: %d ppid: %d\n", getpid(), getppid());
-        char *args[] = {"2", "C", "Programming", NULL};
-        int ret = execv("./RR", args);
+        if (schedulingAlgorithm == 1)
+        {
+            ret = execl("HPF", "HPF", NULL);
+        }
+        else if (schedulingAlgorithm == 2)
+        {
+            ret = execl("SRTN", "SRTN", NULL);
+        }
+        else
+        {
+            char arg[10];
+            sprintf(arg, "%d", quantam);
+            ret = execl("RR", "RR", arg, NULL);
+        }
         printf("%d\n", ret);
     }
     else
     {
-        down(scheduler_ready);
+        //down(scheduler_ready);
         clk_id = fork();
         if (clk_id == -1)
         {
@@ -137,34 +152,31 @@ int main(int argc, char *argv[])
         if (clk_id == 0)
         {
             printf("pid: %d ppid: %d\n", getpid(), getppid());
-            char *args[] = {"clock", "C", "Programming", NULL};
-            execv("./clk", args);
+            execl("clk", "clk", NULL);
         }
     }
     // 3. Initiate and create the scheduler and clock processes.
     // 4. Use this function after creating the clock process to initialize clock
-    initClk();
     // To get time use this
-    int x = getClk();
+    //int x = getClk();
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
+    initClk();
+    raise(SIGUSR1);
 
-   // on_clock_tick(SIGUSR1); // intial call at T = 0, later on the clock will be triggering it every sec
-
-    while (1)
+    while (!end)
     {
         pause();
     }
-
+    waitpid(scheduler_id, NULL, 0);
     // 7. Clear clock resources
     destroyClk(true);
 }
 
 void on_clock_tick(int signum)
 {
-    initClk();
-    while (!isEmpty(pData) && front(pData).arrivaltime == getClk())
+    while (!isEmpty(pData) && front(pData).arrivaltime <= getClk())
     {
         *shmaddr_pg = front(pData);
         up(sem1);
@@ -172,15 +184,25 @@ void on_clock_tick(int signum)
         dequeue(pData);
     }
 
-    shmaddr_pg->id = -1;
-    up(sem1);
-    down(sem2);
+    if (isEmpty(pData))
+    {
+        signal(SIGUSR1, SIG_IGN);
+        end = true;
+        shmaddr_pg->id = -2;
+        up(sem1);
+        down(sem2);
+    }
+    else
+    {
+        shmaddr_pg->id = -1;
+        up(sem1);
+        down(sem2);
+    }
 }
 
 void clearResources(int signum)
 {
     //TODO Clears all resources in case of interruption
-    kill(clk_id, SIGKILL);
-    kill(scheduler_id, SIGKILL);
+    remove_ipc();
     exit(0);
 }
