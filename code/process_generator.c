@@ -36,9 +36,9 @@ struct queue *readFile(struct queue *pt, char path[])
     while (fgets(buffer, bufferLength, filePointer))
     {
         int id, arrivaltime, runningtime, priority;
-        sscanf(buffer, "%d\t%d\t%d\t%d\n", &p.id, &p.arrivaltime, &p.runningtime, &p.priority);
+        sscanf(buffer, "%d\t%d\t%d\t%d\t%d\n", &p.id, &p.arrivaltime, &p.runningtime, &p.priority, &p.size);
         enqueue(pt, p);
-        printf("%d\t%d\t%d\t%d\n", p.id, p.arrivaltime, p.runningtime, p.priority);
+        printf("%d\t%d\t%d\t%d\t%d\n", p.id, p.arrivaltime, p.runningtime, p.priority, p.size);
     }
     fclose(filePointer);
     return pt;

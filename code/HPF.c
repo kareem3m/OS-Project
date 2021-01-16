@@ -2,6 +2,8 @@
 // #include "circular.h"
 #include "P_Q.h"
 #include <time.h>
+#include "buddy-queue.h"
+#include <sys/queue.h>
 
 void start_process(struct processData *process);
 void check_for_new_processes();
@@ -11,18 +13,35 @@ void log_status(struct processData *p, char *status);
 
 FILE *logptr;
 
+struct process
+{
+    struct processData data;
+    CIRCLEQ_ENTRY(process)
+    ptrs;
+};
+
+CIRCLEQ_HEAD(circlehead, process);
+
+struct circlehead head_wait;
+
+int wait_queue_size = 0;
+struct circlehead *wait_queue;
+
 struct processData *Head;
 struct processData *Current_Process;
 bool Finished_Processes = false;
 int main(int argc, char *argv[])
 {
+    CIRCLEQ_INIT(&head_wait);
+    wait_queue = &head_wait;
+    initialise();
+
     initialize_ipc();
     //Head=(struct processData*)malloc(sizeof(struct processData));
     //Current_Process=(struct processData*)malloc(sizeof(struct processData));
     Current_Process = New_Process(0, 0, 0, 0);
     Head = New_Process(0, 0, 0, 0);
     //Current_Process=NULL;
-
 
     initClk();
     while (1)
@@ -114,8 +133,33 @@ void remove_process(struct processData *Pr)
     Pr->status = FINISHED;
     Pr->last_run = getClk();
     log_status(Pr, "finished");
-    //struct processData* temp=(struct processData*)malloc(sizeof(struct processData));
+    struct processData *temp = (struct processData *)malloc(sizeof(struct processData));
     printf("%d in delation\n", Pr->priority);
+    deallocation(Pr->id);
+    struct process *np = (struct process *)malloc(sizeof(struct process));
+    CIRCLEQ_FOREACH(np, &head_wait, ptrs)
+    {
+        if (allocation(&np->data))
+        {
+            np->data.wait = getClk() - np->data.arrivaltime;
+            // fadel el SIZE wel WAIT
+            if (Head->priority == 0)
+            {
+                Head = New_Process(np->data.arrivaltime, np->data.priority, np->data.runningtime, np->data.id);
+                printf("after enqueue %d \n", Head->id);
+            }
+            else
+            {
+                temp = New_Process(np->data.arrivaltime, np->data.priority, np->data.runningtime, np->data.id);
+                printf("before enque %d \n", np->data.id);
+                Enqueue(&Head, &temp);
+                printf("%d in creation\n", temp->id);
+            }
+
+            CIRCLEQ_REMOVE(&head_wait, np, ptrs);
+            wait_queue_size -= 1;
+        }
+    }
     //Dequeue(&Pr);
     //free(Current_Process);
     Current_Process = New_Process(0, 0, 0, 0);
@@ -145,18 +189,40 @@ void check_for_new_processes()
             fflush(stdout);
             return;
         }
-        if (Head->priority == 0)
+
+        if (allocation(shmaddr_pg))
         {
-            Head = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->priority, shmaddr_pg->runningtime, shmaddr_pg->id);
-            printf("after enqueue %d \n", Head->id);
+            if (Head->priority == 0)
+            {
+                Head = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->priority, shmaddr_pg->runningtime, shmaddr_pg->id);
+                printf("after enqueue %d \n", Head->id);
+            }
+            else
+            {
+                pr = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->priority, shmaddr_pg->runningtime, shmaddr_pg->id);
+                printf("before enque %d \n", pr->id);
+                Enqueue(&Head, &pr);
+                printf("%d in creation\n", Head->id);
+            }
         }
         else
         {
-            pr = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->priority, shmaddr_pg->runningtime, shmaddr_pg->id);
-            printf("before enque %d \n", pr->id);
-            Enqueue(&Head, &pr);
-            printf("%d in creation\n", Head->id);
+            struct process *p = (struct process *)malloc(sizeof(struct process));
+            p->data.id = shmaddr_pg->id;
+            p->data.arrivaltime = shmaddr_pg->arrivaltime;
+            p->data.last_run = getClk();
+            p->data.priority = shmaddr_pg->priority;
+            p->data.runningtime = shmaddr_pg->runningtime;
+            p->data.remainingtime = shmaddr_pg->runningtime;
+            p->data.status = READY;
+            p->data.wait = 0;
+            p->data.size = shmaddr_pg->size;
+            CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
+            printf("at T = %d process %d arrived and waited\n", getClk(), p->data.id);
+            fflush(stdout);
+            wait_queue_size += 1;
         }
+
         up(sem2);
         printf("HPF: upped sem2\n");
         fflush(stdout);

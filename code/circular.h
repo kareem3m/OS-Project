@@ -22,6 +22,7 @@ struct processData
     int pid;
     int last_run;
     int responsetime;
+    int size;
     struct processData* Next;
 };
 struct queue
