@@ -70,6 +70,7 @@ int main(int argc, char *argv[])
     scanf("%d", &schedulingAlgorithm);
     printf("Please enter the quantum for RR or 0 if not:\n");
     scanf("%d", &quantam);
+    printf("quantam %d \n",quantam);
     printf("pid: %d\n", getpid());
 
     initialize_ipc();

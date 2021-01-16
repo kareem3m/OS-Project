@@ -46,6 +46,7 @@ int main(int argc, char *argv[])
     initClk();
     while (1)
     {
+        printf("finished_process %d \n ",Finished_Processes);
         if (Finished_Processes == false)
         {
             check_for_new_processes();
@@ -58,13 +59,14 @@ int main(int argc, char *argv[])
             down(sem1_process);
             Current_Process->remainingtime--;
             useful_seconds++;
+        printf("remaningtime %d \n", Current_Process->remainingtime);
         }
         else if (Current_Process->status == STARTED && Current_Process->remainingtime > 0)
         {
             down(sem1_process);
             Current_Process->remainingtime--;
             useful_seconds++;
-            printf("remaningtime %d ", Current_Process->remainingtime);
+            printf("remaningtime %d \n", Current_Process->remainingtime);
         }
         up(sem2_process);
         if (Current_Process->status == STARTED && Current_Process->remainingtime == 0)
@@ -134,8 +136,11 @@ void remove_process(struct processData *Pr)
     Pr->last_run = getClk();
     log_status(Pr, "finished");
     struct processData *temp = (struct processData *)malloc(sizeof(struct processData));
-    printf("%d in delation\n", Pr->priority);
+
+    printf("%d priority in delation %d id in delation\n", Pr->priority,Pr->id);
     deallocation(Pr->id);
+    printf("llll\n");
+    fflush(stdout);
     struct process *np = (struct process *)malloc(sizeof(struct process));
     CIRCLEQ_FOREACH(np, &head_wait, ptrs)
     {
@@ -202,7 +207,7 @@ void check_for_new_processes()
                 pr = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->priority, shmaddr_pg->runningtime, shmaddr_pg->id);
                 printf("before enque %d \n", pr->id);
                 Enqueue(&Head, &pr);
-                printf("%d in creation\n", Head->id);
+                printf("%d in creation\n", Head->priority);
             }
         }
         else

@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     *shmaddr = clk; /* initialize shared memory */
     while (1)
     {
-        printf("CLOCK >>>>>>>>>>>>>>> Time = %s, CLK = %d\n", getRealTime(), *shmaddr);
+        // printf("CLOCK >>>>>>>>>>>>>>> Time = %s, CLK = %d\n", getRealTime(), *shmaddr);
         sleep(1);
         (*shmaddr)++;
         kill(getppid(), SIGUSR1);

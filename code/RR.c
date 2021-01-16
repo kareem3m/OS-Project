@@ -1,7 +1,7 @@
-#include "headers.h"
+
 #include <sys/queue.h>
 #include <time.h>
-
+#include"buddy-queue.h"
 struct process
 {
     struct processData data;
@@ -12,6 +12,7 @@ struct process
 CIRCLEQ_HEAD(circlehead, process);
 
 struct circlehead *ready_queue;
+struct circlehead *wait_queue;
 
 struct process *current_process = NULL;
 
@@ -26,8 +27,9 @@ void wait_on_process(struct process *p);
 int quantum = 1;
 int remaining_quantum_time = 1;
 int ready_queue_size = 0;
+int wait_queue_size = 0;
 bool no_more_new_processes = false;
-
+struct circlehead head_wait;
 
 int main(int argc, char *argv[])
 {
@@ -36,11 +38,14 @@ int main(int argc, char *argv[])
     CIRCLEQ_INIT(&head);
     ready_queue = &head;
 
+    CIRCLEQ_INIT(&head_wait);
+    wait_queue = &head_wait;
+
+
     quantum = atoi(argv[1]);
     remaining_quantum_time = quantum;
-
+    initialise();
     initClk();
-
     while (1)
     {
         if (ready_queue_size > 0)
@@ -79,8 +84,9 @@ void schedule_process()
     }
 
     useful_seconds++;
+    printf("la\n");
     down(sem1_process);
-
+    printf("3a\n");
     current_process->data.remainingtime--;
 
     no_more_new_processes ? 0 : get_new_processes();
@@ -156,6 +162,8 @@ void remove_process(struct process *p)
     fflush(stdout);
     p->data.status = FINISHED;
     wait_on_process(p);
+    deallocation(p->data.id);
+    struct process *np = (struct process *)malloc(sizeof(struct process));
     if (ready_queue_size > 1)
     {
         current_process = CIRCLEQ_LOOP_NEXT(ready_queue, current_process, ptrs);
@@ -166,6 +174,27 @@ void remove_process(struct process *p)
     }
     CIRCLEQ_REMOVE(ready_queue, p, ptrs);
     ready_queue_size--;
+    CIRCLEQ_FOREACH(np, &head_wait, ptrs)
+    if (allocation(&np->data))
+    {       
+            np->data.wait=getClk()-np->data.arrivaltime;
+            if (CIRCLEQ_EMPTY(ready_queue))
+            {
+                CIRCLEQ_INSERT_HEAD(ready_queue, np, ptrs);
+                current_process = np;
+                //printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), np->data.id);
+                fflush(stdout);
+            }
+            else
+            {
+                CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, np, ptrs);
+                printf("at T = %d process %d arrived\n", getClk(), np->data.id);
+                fflush(stdout);
+            }
+            ready_queue_size += 1;
+            CIRCLEQ_REMOVE(&head_wait, np, ptrs);
+            wait_queue_size-=1;
+    }
 }
 
 void get_new_processes()
@@ -194,22 +223,31 @@ void get_new_processes()
         p->data.remainingtime = shmaddr_pg->runningtime;
         p->data.status = READY;
         p->data.wait = 0;
-
-        if (CIRCLEQ_EMPTY(ready_queue))
-        {
-            CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
-            current_process = p;
-            printf("at CLK = %d process %d arrived\n", getClk(), p->data.id);
-            fflush(stdout);
+        p->data.size=shmaddr_pg->size;
+     
+        if(allocation(&p->data)){
+            if (CIRCLEQ_EMPTY(ready_queue))
+            {
+                CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
+                current_process = p;
+                //printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), p->data.id);
+                fflush(stdout);
+            }
+            else
+            {
+                CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
+                printf("at T = %d process %d arrived\n", getClk(), p->data.id);
+                fflush(stdout);
+            }
+            ready_queue_size += 1;
         }
-        else
-        {
-            CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
-            printf("at T = %d process %d arrived\n", getClk(), p->data.id);
+        else{
+            
+            CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
+            printf("at T = %d process %d arrived and waited\n", getClk(), p->data.id);
             fflush(stdout);
+            wait_queue_size+= 1;
         }
-
-        ready_queue_size += 1;
         up(sem2);
     }
 }
@@ -236,4 +274,3 @@ void wait_on_process(struct process *p)
     }
     log_status(&(p->data), status);
 }
-

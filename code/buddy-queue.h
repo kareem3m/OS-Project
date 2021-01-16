@@ -7,7 +7,7 @@
 #include "headers.h"
 
 struct slice
-{
+{   
     int size;
     int start;
     int end;
@@ -15,6 +15,7 @@ struct slice
     struct processData *p;
     TAILQ_ENTRY(slice)
     ptrs;
+    int id;
 };
 int heighestPowerOfTwo(int num){
     return (int)pow(2,(int)ceil(log2(num)));
@@ -22,17 +23,17 @@ int heighestPowerOfTwo(int num){
 }
 FILE *logptrbuddy;
 
-void log_status_buddy(struct processData *p, char *allocaed, int start, int end)
+void log_status_buddy(struct processData *p, char *allocaed, int start, int end,int id)
 {
     logptrbuddy = fopen("memory.log", "a");
-    int ret = fprintf(logptrbuddy, "At time %d %s %d bytes for process %d from %d to %d\n", getClk(), allocaed, p->size, p->id, start, end);
+    int ret = fprintf(logptrbuddy, "At time %d %s %d bytes for process %d from %d to %d\n", getClk(), allocaed, p->size,id, start, end);
     fclose(logptrbuddy);
 }
 TAILQ_HEAD(TAILQhead, slice);
 struct TAILQhead head; /* TAILQ head. */
 int allocation(struct processData* process)
 {
-    
+ 
     int size=heighestPowerOfTwo(process->size);
     struct slice *np;
     int find = 0;
@@ -76,24 +77,29 @@ int allocation(struct processData* process)
             np = npfirst;
         }
         np->p=process;
+        printf("%d np->p->id in buddy queue %d process id\n",np->p->id,process->id);
         np->allocated = 1;
+        np->id=process->id;
         printf("start: %d, end: %d, size: %d, allocated: %d\n", np->start, np->end, np->size, np->allocated);
-        log_status_buddy(np->p, "allocated", np->start, np->end-1);
+        log_status_buddy(np->p, "allocated", np->start, np->end-1,np->id);
         return 1;
     }
     return 0;
 }
 int deallocation(int id)
-{
+{  printf("%d in buddy queue\n",id);
     struct slice *np, *next, *prev;
-    TAILQ_FOREACH(np, &head, ptrs)
-    if (np->p->id==id)
+    TAILQ_FOREACH(np, &head, ptrs){
+         printf("%d np->p->id in buddy queue\n",np->id);
+    if (np->id==id)
     {
-        log_status_buddy(np->p, "freed", np->start, np->end-1);
+        log_status_buddy(np->p, "freed", np->start, np->end-1,np->id);
         printf("start: %d, end: %d, size: %d, deallocated: %d\n", np->start, np->end, np->size, np->allocated);
         np->allocated = 0;
         np->p=NULL;
+        np->id=-1;
         break;
+    }
     }
     next = TAILQ_NEXT(np, ptrs);
     prev = TAILQ_PREV(np, TAILQhead, ptrs);
