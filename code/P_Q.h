@@ -38,6 +38,12 @@
 // 	 return temp;
 
 // }
+
+int Is_Empty(struct processData** head) 
+{ 
+	return (*head) == NULL; 
+} 
+
 void Enqueue(struct processData** head,struct processData** process) 
 { 
 	struct processData* start = (*head); 
@@ -71,10 +77,7 @@ void Enqueue(struct processData** head,struct processData** process)
 		start->Next = temp; 
 	} 
 } 
-int Is_Empty(struct processData** head) 
-{ 
-	return (*head) == NULL; 
-} 
+
 void Dequeue(struct processData** head) 
 { 
 	struct processData* temp = (*head);  //assignmemt operator

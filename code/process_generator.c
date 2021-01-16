@@ -46,14 +46,7 @@ struct queue *readFile(struct queue *pt, char path[])
 
 struct msgbuff;
 /* arg for semctl system calls. */
-union Semun
-{
-    int val;               /* value for SETVAL */
-    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
-    ushort *array;         /* array for GETALL & SETALL */
-    struct seminfo *__buf; /* buffer for IPC_INFO */
-    void *__pad;
-};
+
 
 pid_t scheduler_id, clk_id;
 
@@ -91,12 +84,6 @@ int main(int argc, char *argv[])
     }
     semun.val = 0; /* initial value of the semaphore, Binary semaphore */
     if (semctl(sem2, 0, SETVAL, semun) == -1)
-    {
-        perror("Error in semctl");
-        exit(-1);
-    }
-    semun.val = 0;
-    if (semctl(scheduler_ready, 0, SETVAL, semun) == -1)
     {
         perror("Error in semctl");
         exit(-1);

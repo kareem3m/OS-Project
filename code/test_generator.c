@@ -1,15 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <headers.h>
 #define null 0
 
-struct processData
-{
-    int arrivaltime;
-    int priority;
-    int runningtime;
-    int id;
-};
+//struct processData
+//{
+//    int arrivaltime;
+//    int priority;
+//    int runningtime;
+//    int id;
+//};
 
 int main(int argc, char * argv[])
 {

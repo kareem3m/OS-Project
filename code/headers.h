@@ -1,3 +1,4 @@
+#pragma once
 #include <stdio.h> //if you don't use scanf/printf change this include
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,7 +67,7 @@ void destroyClk(bool terminateAll)
     }
 }
 
-int sem1, sem2, scheduler_ready, sem1_process, sem2_process;
+int sem1, sem2, sem1_process, sem2_process;
 int shmid_pg;
 struct processData *shmaddr_pg;
 
@@ -95,9 +96,7 @@ void initialize_ipc()
     sem1_process = semget(key_id11, 1, 0666 | IPC_CREAT);
     sem2_process = semget(key_id12, 1, 0666 | IPC_CREAT);
 
-    scheduler_ready = semget(key_id10, 1, 0666 | IPC_CREAT);
-
-    if (sem1 == -1 || sem2 == -1 || scheduler_ready == -1)
+    if (sem1 == -1 || sem2 == -1 || sem1_process == -1 || sem2_process == -1)
     {
         perror("Error in create sem");
         exit(-1);
@@ -115,7 +114,6 @@ void remove_ipc()
     semctl(sem2, 0, IPC_RMID);
     semctl(sem1_process, 0, IPC_RMID);
     semctl(sem2_process, 0, IPC_RMID);
-    semctl(scheduler_ready, 0, IPC_RMID);
 }
 
 void up(int sem)
@@ -152,24 +150,23 @@ void down(int sem)
     }
 }
 
-char* getRealTime() // For debugging purposes..
+union Semun
 {
-    long ms;  // Milliseconds
-    time_t s; // Seconds
-    struct timespec spec;
+    int val;               /* value for SETVAL */
+    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
+    ushort *array;         /* array for GETALL & SETALL */
+    struct seminfo *__buf; /* buffer for IPC_INFO */
+    void *__pad;
+};
 
-    clock_gettime(CLOCK_REALTIME, &spec);
-
-    s = spec.tv_sec;
-    ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
-    if (ms > 999)
+void reset(int sem){
+    union Semun semun;
+    semun.val = 0; /* initial value of the semaphore, Binary semaphore */
+    if (semctl(sem, 0, SETVAL, semun) == -1)
     {
-        s++;
-        ms = 0;
+        perror("Error in semctl");
+        exit(-1);
     }
-    char* time = (char*)malloc(10);
-    sprintf(time, "%lds %ldms", s, ms);
-    return time;
 }
 
 // schedulers common

@@ -199,7 +199,7 @@ void get_new_processes()
         {
             CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
             current_process = p;
-            printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), p->data.id);
+            printf("at CLK = %d process %d arrived\n", getClk(), p->data.id);
             fflush(stdout);
         }
         else
