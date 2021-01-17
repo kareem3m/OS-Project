@@ -124,7 +124,8 @@ int main(int argc, char** argv)
         perror("Error in attach in reader");
         exit(-1);
     }
-  
+    int i=0;
+    int add=100;
     while(1)
     {       
         down(empty);          
