@@ -22,8 +22,8 @@ int main(int argc, char * argv[])
         //[min-max] = rand() % (max_number + 1 - minimum_number) + minimum_number
         pData.id = i;
         pData.arrivalTime += rand() % (11); //processes arrives in order
-        pData.runningTime = rand() % (30);
-        pData.priority = rand() % (11);
+        pData.runningTime =1+ rand() % (30);
+        pData.priority =1+ rand() % (11);
         fprintf(pFile, "%d\t%d\t%d\t%d\n", pData.id, pData.arrivalTime, pData.runningTime, pData.priority);
     }
     fclose(pFile);
