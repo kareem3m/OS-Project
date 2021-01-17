@@ -47,7 +47,7 @@ struct msgbuff;
 /* arg for semctl system calls. */
 
 
-pid_t scheduler_id, clk_id;
+pid_t schedulerId, clkId;
 
 bool end = false;
 
@@ -100,12 +100,12 @@ int main(int argc, char *argv[])
     }
 
 
-    scheduler_id = fork();
-    if (scheduler_id == -1)
+    schedulerId = fork();
+    if (schedulerId == -1)
     {
         printf("There is an error while calling fork()");
     }
-    if (scheduler_id == 0)
+    if (schedulerId == 0)
     {
         int ret;
         if (schedulingAlgorithm == 1)
@@ -126,12 +126,12 @@ int main(int argc, char *argv[])
     else
     {
         //down(scheduler_ready);
-        clk_id = fork();
-        if (clk_id == -1)
+        clkId = fork();
+        if (clkId == -1)
         {
             printf("There is an error while calling fork()");
         }
-        if (clk_id == 0)
+        if (clkId == 0)
         {
             execl("clk", "clk", NULL);
         }
@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
     {
         pause();
     }
-    waitpid(scheduler_id, NULL, 0);
+    waitpid(schedulerId, NULL, 0);
     // 7. Clear clock resources
     destroyClk(true);
 }

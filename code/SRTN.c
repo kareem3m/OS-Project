@@ -11,7 +11,7 @@ struct process
 };
 
 CIRCLEQ_HEAD(circlehead, process);
-struct circlehead *wait_queue;
+struct circlehead *waitQueue;
 
 void start_process(struct processData *process);
 void check_for_new_processes();
@@ -21,47 +21,48 @@ void stop_process(struct processData *p);
 void remove_process(struct processData *p);
 
 FILE *logptr;
-struct circlehead head_wait;
+struct circlehead headWait;
 struct processData *Head;
-struct processData *Current_Process;
+struct processData *currentProcess;
 
-bool Finished_Processes = false;
-int wait_queue_size = 0;
+bool finishedProcesses = false;
+int waitQueueSize = 0;
+
 int main(int argc, char *argv[])
 {
     initialise();
     initialize_ipc();
-    CIRCLEQ_INIT(&head_wait);
-    wait_queue = &head_wait;
+    CIRCLEQ_INIT(&headWait);
+    waitQueue = &headWait;
 
     Head = New_Process(0, 0, 0, 0);
-    Current_Process = New_Process(0, 0, 0, 0);
+    currentProcess = New_Process(0, 0, 0, 0);
 
     initClk();
     while (1)
     {
-        if (Finished_Processes == false)
+        if (finishedProcesses == false)
         {
             check_for_new_processes();
         }
 
         up(sem2_process);
 
-        if (Current_Process->priority == 0 && Head->priority != 0 && Head->status == READY)
+        if (currentProcess->priority == 0 && Head->priority != 0 && Head->status == READY)
         {
             reset(sem2_process);
             start_process(Head);
             down(sem1_process);
             useful_seconds++;
-            Current_Process->remainingTime--;
-            Current_Process->priority--;
+            currentProcess->remainingTime--;
+            currentProcess->priority--;
         }
-        else if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingTime != 0)
+        else if ((currentProcess->status == STARTED || currentProcess->status == RESUMED) && currentProcess->remainingTime != 0)
         {
             down(sem1_process);
             useful_seconds++;
-            Current_Process->remainingTime--;
-            Current_Process->priority--;
+            currentProcess->remainingTime--;
+            currentProcess->priority--;
         }
         else if (Head->status == STOPPED && Head->remainingTime != 0)
         {
@@ -69,16 +70,16 @@ int main(int argc, char *argv[])
             resume_process(Head);
             useful_seconds++;
             down(sem1_process);
-            Current_Process->remainingTime--;
-            Current_Process->priority--;
+            currentProcess->remainingTime--;
+            currentProcess->priority--;
         }
 
-        if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingTime == 0)
+        if ((currentProcess->status == STARTED || currentProcess->status == RESUMED) && currentProcess->remainingTime == 0)
         {
             up(sem2_process);
-            remove_process(Current_Process);
+            remove_process(currentProcess);
         }
-        if (Finished_Processes == true && Head->priority == 0 && Current_Process->priority == 0)
+        if (currentProcess == true && Head->priority == 0 && currentProcess->priority == 0)
         {
             generate_perf_file();
             exit(0);
@@ -90,14 +91,14 @@ int main(int argc, char *argv[])
 
 void start_process(struct processData *pr)
 {
-    Current_Process->id = pr->id;
-    Current_Process->priority = pr->remainingTime;
-    Current_Process->arrivalTime = pr->arrivalTime;
-    Current_Process->runningTime = pr->runningTime;
-    Current_Process->remainingTime = pr->remainingTime;
-    Current_Process->lastRun = pr->lastRun;
-    Current_Process->pid = pr->pid;
-    Current_Process->status = pr->status;
+    currentProcess->id = pr->id;
+    currentProcess->priority = pr->remainingTime;
+    currentProcess->arrivalTime = pr->arrivalTime;
+    currentProcess->runningTime = pr->runningTime;
+    currentProcess->remainingTime = pr->remainingTime;
+    currentProcess->lastRun = pr->lastRun;
+    currentProcess->pid = pr->pid;
+    currentProcess->status = pr->status;
 
     Dequeue(&pr);
     Head = *&pr;
@@ -107,34 +108,34 @@ void start_process(struct processData *pr)
         Head = New_Process(0, 0, 0, 0);
     }
 
-    Current_Process->wait += getClk() - Current_Process->arrivalTime;
+    currentProcess->wait += getClk() - currentProcess->arrivalTime;
     int pid = fork();
     if (pid == 0)
     {
         char arg[10];
-        sprintf(arg, "%d", Current_Process->runningTime);
+        sprintf(arg, "%d", currentProcess->runningTime);
         int ret = execl("process", "process", arg, NULL);
         perror("Error in execl: ");
         exit(-1);
     }
     else
     {
-        Current_Process->pid = pid;
-        Current_Process->status = STARTED;
-        log_status(Current_Process, "started");
+        currentProcess->pid = pid;
+        currentProcess->status = STARTED;
+        log_status(currentProcess, "started");
     }
 }
 
 void resume_process(struct processData *p)
 {
-    Current_Process->id = p->id;
-    Current_Process->priority = p->remainingTime;
-    Current_Process->arrivalTime = p->arrivalTime;
-    Current_Process->runningTime = p->runningTime;
-    Current_Process->remainingTime = p->remainingTime;
-    Current_Process->lastRun = p->lastRun;
-    Current_Process->pid = p->pid;
-    Current_Process->status = p->status;
+    currentProcess->id = p->id;
+    currentProcess->priority = p->remainingTime;
+    currentProcess->arrivalTime = p->arrivalTime;
+    currentProcess->runningTime = p->runningTime;
+    currentProcess->remainingTime = p->remainingTime;
+    currentProcess->lastRun = p->lastRun;
+    currentProcess->pid = p->pid;
+    currentProcess->status = p->status;
 
     Dequeue(&p);
     Head = *&p;
@@ -144,15 +145,15 @@ void resume_process(struct processData *p)
         Head = New_Process(0, 0, 0, 0);
 
     }
-    if (kill(Current_Process->pid, SIGCONT) == -1)
+    if (kill(currentProcess->pid, SIGCONT) == -1)
     {
         perror("Error in kill: ");
         exit(-1);
     }
 
-    Current_Process->status = RESUMED;
-    Current_Process->wait += getClk() - Current_Process->lastRun;
-    log_status(Current_Process, "resumed");
+    currentProcess->status = RESUMED;
+    currentProcess->wait += getClk() - currentProcess->lastRun;
+    log_status(currentProcess, "resumed");
 }
 
 void stop_process(struct processData *p)
@@ -192,7 +193,7 @@ void remove_process(struct processData *Pr)
     deallocation(Pr->id);
     struct processData *temp = (struct processData *)malloc(sizeof(struct processData));
     struct process *np = (struct process *)malloc(sizeof(struct process));
-    CIRCLEQ_FOREACH(np, &head_wait, ptrs)
+    CIRCLEQ_FOREACH(np, &headWait, ptrs)
     {
         if (allocation(&np->data))
         {
@@ -206,23 +207,23 @@ void remove_process(struct processData *Pr)
                 temp = New_Process(np->data.arrivalTime, np->data.runningTime, np->data.runningTime, np->data.id);
                 Enqueue(&Head, &temp);
             }
-            if (Head->priority < Current_Process->priority)
+            if (Head->priority < currentProcess->priority)
             {
-            stop_process(Current_Process);
-            if (Current_Process->remainingTime != 0)
+            stop_process(currentProcess);
+            if (currentProcess->remainingTime != 0)
             {
-                Current_Process->priority = Current_Process->remainingTime;
-                Enqueue(&Head, &Current_Process);
+                currentProcess->priority = currentProcess->remainingTime;
+                Enqueue(&Head, &currentProcess);
             }
-            Current_Process = New_Process(0, 0, 0, 0);
+            currentProcess = New_Process(0, 0, 0, 0);
         }
 
-            CIRCLEQ_REMOVE(&head_wait, np, ptrs);
-            wait_queue_size -= 1;
+            CIRCLEQ_REMOVE(&headWait, np, ptrs);
+            waitQueueSize -= 1;
         }
     }
-    free(Current_Process);
-    Current_Process = New_Process(0, 0, 0, 0);
+    free(currentProcess);
+    currentProcess = New_Process(0, 0, 0, 0);
 }
 void check_for_new_processes()
 {
@@ -233,7 +234,7 @@ void check_for_new_processes()
         if (shmaddr_pg->id == -2)
         {
             up(sem2);
-            Finished_Processes = true;
+            finishedProcesses = true;
             return;
         }
         if (shmaddr_pg->id == -1)
@@ -254,15 +255,15 @@ void check_for_new_processes()
                 Enqueue(&Head, &pr);
             }
         
-            if (Head->priority < Current_Process->priority)
+            if (Head->priority < currentProcess->priority)
             {
-                stop_process(Current_Process);
-                if (Current_Process->remainingTime != 0)
+                stop_process(currentProcess);
+                if (currentProcess->remainingTime != 0)
                 {
-                    Current_Process->priority = Current_Process->remainingTime;
-                    Enqueue(&Head, &Current_Process);
+                    currentProcess->priority = currentProcess->remainingTime;
+                    Enqueue(&Head, &currentProcess);
                 }
-                Current_Process = New_Process(0, 0, 0, 0);
+                currentProcess = New_Process(0, 0, 0, 0);
             }
         }
         else
@@ -277,8 +278,8 @@ void check_for_new_processes()
             p->data.status = READY;
             p->data.wait = 0;
             p->data.size = shmaddr_pg->size;
-            CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
-            wait_queue_size += 1;
+            CIRCLEQ_INSERT_TAIL(waitQueue, p, ptrs);
+            waitQueueSize += 1;
         }
         up(sem2);
     }

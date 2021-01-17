@@ -11,10 +11,10 @@ struct process
 
 CIRCLEQ_HEAD(circlehead, process);
 
-struct circlehead *ready_queue;
-struct circlehead *wait_queue;
+struct circlehead *readyQueue;
+struct circlehead *waitQueue;
 
-struct process *current_process = NULL;
+struct process *currentProcess = NULL;
 
 void schedule_process();
 void start_process(struct process *process);
@@ -25,35 +25,35 @@ void get_new_processes();
 void wait_on_process(struct process *p);
 
 int quantum = 1;
-int remaining_quantum_time = 1;
-int ready_queue_size = 0;
-int wait_queue_size = 0;
-bool no_more_new_processes = false;
-struct circlehead head_wait;
+int remainingQuantumTime = 1;
+int readyQueueSize = 0;
+int waitQueueSize = 0;
+bool noMoreNewProcesses = false;
+struct circlehead headWait;
 
 int main(int argc, char *argv[])
 {
     initialize_ipc();
     struct circlehead head;
     CIRCLEQ_INIT(&head);
-    ready_queue = &head;
+    readyQueue = &head;
 
-    CIRCLEQ_INIT(&head_wait);
-    wait_queue = &head_wait;
+    CIRCLEQ_INIT(&headWait);
+    waitQueue = &headWait;
 
     quantum = atoi(argv[1]);
-    remaining_quantum_time = quantum;
+    remainingQuantumTime = quantum;
 
     initialise();
     initClk();
 
     while (1)
     {
-        if (ready_queue_size > 0)
+        if (readyQueueSize > 0)
         {
             schedule_process();
         }
-        else if (no_more_new_processes)
+        else if (noMoreNewProcesses)
         {
             break;
         }
@@ -69,45 +69,45 @@ int main(int argc, char *argv[])
 
 void schedule_process()
 {
-    remaining_quantum_time--;
+    remainingQuantumTime--;
 
-    int status = current_process->data.status;
+    int status = currentProcess->data.status;
 
     if (status == READY)
     {
-        start_process(current_process);
+        start_process(currentProcess);
     }
     else if (status == STOPPED)
     {
-        resume_process(current_process);
+        resume_process(currentProcess);
     }
 
     useful_seconds++;
     down(sem1_process);
-    current_process->data.remainingTime--;
+    currentProcess->data.remainingTime--;
 
-    no_more_new_processes ? 0 : get_new_processes();
+    noMoreNewProcesses ? 0 : get_new_processes();
 
-    if (current_process->data.remainingTime == 0)
+    if (currentProcess->data.remainingTime == 0)
     {
         up(sem2_process);
-        remove_process(current_process);
+        remove_process(currentProcess);
     }
     else
     {
-        if (remaining_quantum_time == 0 && ready_queue_size > 1)
+        if (remainingQuantumTime == 0 && readyQueueSize > 1)
         {
-            stop_process(current_process);
-            current_process = CIRCLEQ_LOOP_NEXT(ready_queue, current_process, ptrs);
+            stop_process(currentProcess);
+            currentProcess = CIRCLEQ_LOOP_NEXT(readyQueue, currentProcess, ptrs);
         }
         else
         {
             up(sem2_process);
         }
     }
-    if (remaining_quantum_time == 0)
+    if (remainingQuantumTime == 0)
     {
-        remaining_quantum_time = quantum;
+        remainingQuantumTime = quantum;
     }
 }
 
@@ -159,19 +159,19 @@ void remove_process(struct process *p)
     //remove process from memory and queue and check if there is a process in wait queue allocate it if the space in memory allowing
     deallocation(p->data.id);
     struct process *np = (struct process *)malloc(sizeof(struct process));
-    if (ready_queue_size > 1)
+    if (readyQueueSize > 1)
     {
-        current_process = CIRCLEQ_LOOP_NEXT(ready_queue, current_process, ptrs);
+        currentProcess = CIRCLEQ_LOOP_NEXT(readyQueue, currentProcess, ptrs);
     }
     else
     {
-        current_process = NULL;
+        currentProcess = NULL;
     }
-    CIRCLEQ_REMOVE(ready_queue, p, ptrs);
-    ready_queue_size--;
-    if (wait_queue_size > 0)
+    CIRCLEQ_REMOVE(readyQueue, p, ptrs);
+    readyQueueSize--;
+    if (waitQueueSize > 0)
     {
-        CIRCLEQ_FOREACH(np, &head_wait, ptrs)
+        CIRCLEQ_FOREACH(np, &headWait, ptrs)
         {
             if (allocation(&np->data))
             {
@@ -187,19 +187,19 @@ void remove_process(struct process *p)
                 p->data.size = np->data.size;
                 p->data.wait = getClk() - np->data.arrivalTime;
                 
-                if (CIRCLEQ_EMPTY(ready_queue))
+                if (CIRCLEQ_EMPTY(readyQueue))
                 {
-                    CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
-                    current_process = p;
+                    CIRCLEQ_INSERT_HEAD(readyQueue, p, ptrs);
+                    currentProcess = p;
 
                 }
                 else
                 {
-                    CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
+                    CIRCLEQ_INSERT_BEFORE(readyQueue, currentProcess, p, ptrs);
                 }
-                ready_queue_size += 1;
-                CIRCLEQ_REMOVE(&head_wait, np, ptrs);
-                wait_queue_size -= 1;
+                readyQueueSize += 1;
+                CIRCLEQ_REMOVE(&headWait, np, ptrs);
+                waitQueueSize -= 1;
             }
         }
     }
@@ -218,7 +218,7 @@ void get_new_processes()
         }
         else if (shmaddr_pg->id == -2)
         {
-            no_more_new_processes = true;
+            noMoreNewProcesses = true;
             up(sem2);
             return;
         }
@@ -236,22 +236,22 @@ void get_new_processes()
         //check if there is a space in memory allocate it and put in in the ready queue else put it in wait queue
         if (allocation(&p->data))
         {
-            if (CIRCLEQ_EMPTY(ready_queue))
+            if (CIRCLEQ_EMPTY(readyQueue))
             {
-                CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
-                current_process = p;
+                CIRCLEQ_INSERT_HEAD(readyQueue, p, ptrs);
+                currentProcess = p;
             }
             else
             {
-                CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
+                CIRCLEQ_INSERT_BEFORE(readyQueue, currentProcess, p, ptrs);
             }
-            ready_queue_size += 1;
+            readyQueueSize += 1;
         }
         else
         {
 
-            CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
-            wait_queue_size += 1;
+            CIRCLEQ_INSERT_TAIL(waitQueue, p, ptrs);
+            waitQueueSize += 1;
         }
         up(sem2);
     }

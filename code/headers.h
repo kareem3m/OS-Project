@@ -141,13 +141,8 @@ void down(int sem)
     p_op.sem_op = -1;
     p_op.sem_flg = !IPC_NOWAIT;
 
-    if (semop(sem, &p_op, 1) == -1)
-    {
-        printf("pid = %d ", getpid());
-        fflush(NULL);
-        perror("Error in down()");
-        //exit(-1);
-    }
+    semop(sem, &p_op, 1);
+    
 }
 
 union Semun
