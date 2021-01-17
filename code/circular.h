@@ -1,7 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <stdlib.h>
- 
+
 #define READY 0
 #define STARTED 1
 #define RESUMED 2
@@ -12,23 +12,23 @@
 // Data structure for queue
 struct processData
 {
-    int arrivaltime;
+    int arrivalTime;
     int priority;
-    int runningtime;
-    int remainingtime;
+    int runningTime;
+    int remainingTime;
     int wait;
     int id;
     int status;
     int pid;
-    int last_run;
-    int responsetime;
+    int lastRun;
+    int responseTime;
     int size;
-    struct processData* Next;
+    struct processData* next;
 };
 struct queue
 {
     struct processData *items;        // array to store queue elements
-    int maxsize;    // maximum capacity of the queue
+    int maxSize;    // maximum capacity of the queue
     int front;        // front points to front element in the queue (if any)
     int rear;        // rear points to last element in the queue
     int size;        // current capacity of the queue
@@ -41,7 +41,7 @@ struct queue* newQueue(int size)
     pt = (struct queue*)malloc(sizeof(struct queue));
     
     pt->items = (struct processData*)malloc(size * sizeof(struct processData));
-    pt->maxsize = size;
+    pt->maxSize = size;
     pt->front = 0;
     pt->rear = -1;
     pt->size = 0;
@@ -76,7 +76,7 @@ struct processData front(struct queue *pt)
 // Utility function to add an element x in the queue
 void enqueue(struct queue *pt, struct processData x)
 {
-    if (size(pt) == pt->maxsize)
+    if (size(pt) == pt->maxSize)
     {
         printf("OverFlow\nProgram Terminated\n");
         exit(EXIT_FAILURE);
@@ -84,7 +84,7 @@ void enqueue(struct queue *pt, struct processData x)
  
 
  
-    pt->rear = (pt->rear + 1) % pt->maxsize;    // circular queue
+    pt->rear = (pt->rear + 1) % pt->maxSize;    // circular queue
     pt->items[pt->rear] = x;
     pt->size++;
  
@@ -102,7 +102,7 @@ void dequeue(struct queue *pt)
  
 
  
-    pt->front = (pt->front + 1) % pt->maxsize;    // circular queue
+    pt->front = (pt->front + 1) % pt->maxSize;    // circular queue
     pt->size--;
  
 

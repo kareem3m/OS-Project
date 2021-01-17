@@ -181,12 +181,12 @@ void log_status(struct processData *p, char *status)
 {
     logptr = fopen("scheduler.log", "a");
 
-    int ret = fprintf(logptr, "At time %d process %d %s arr %d total %d remain %d wait %d", getClk(), p->id, status, p->arrivaltime, p->runningtime, p->remainingtime, p->wait);
+    int ret = fprintf(logptr, "At time %d process %d %s arr %d total %d remain %d wait %d", getClk(), p->id, status, p->arrivalTime, p->runningTime, p->remainingTime, p->wait);
 
     if (p->status == FINISHED)
     {
-        float TA = getClk() - p->arrivaltime;
-        float WTA = TA / p->runningtime;
+        float TA = getClk() - p->arrivalTime;
+        float WTA = TA / p->runningTime;
         fprintf(logptr, " TA = %d WTA %.2f \n", (int)TA, WTA);
         n++;
         wta[n] = WTA;

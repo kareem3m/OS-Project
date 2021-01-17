@@ -4,14 +4,6 @@
 #include "headers.h"
 #define null 0
 
-//struct processData
-//{
-//    int arrivaltime;
-//    int priority;
-//    int runningtime;
-//    int id;
-//};
-
 int main(int argc, char * argv[])
 {
     FILE * pFile;
@@ -23,17 +15,17 @@ int main(int argc, char * argv[])
     srand(time(null));
     //fprintf(pFile,"%d\n",no);
     fprintf(pFile, "#id arrival runtime priority\n");
-    pData.arrivaltime = 1;
+    pData.arrivalTime = 1;
     for (int i = 1 ; i <= no ; i++)
     {
         //generate Data Randomly
         //[min-max] = rand() % (max_number + 1 - minimum_number) + minimum_number
         pData.id = i;
-        pData.arrivaltime = 1; //processes arrives in order
-        pData.runningtime = rand() % (30);
-        pData.priority = rand() % (11);
-        pData.size = 256;
-        fprintf(pFile, "%d\t%d\t%d\t%d\t%d\n", pData.id, pData.arrivaltime, pData.runningtime, pData.priority, pData.size);
+        pData.arrivalTime += rand() % (11); //processes arrives in order
+        pData.runningTime = 1+rand() % (30);
+        pData.priority = 1+rand() % (11);
+        pData.size = 1+rand() % (254);
+        fprintf(pFile, "%d\t%d\t%d\t%d\t%d\n", pData.id, pData.arrivalTime, pData.runningTime, pData.priority, pData.size);
     }
     fclose(pFile);
 }

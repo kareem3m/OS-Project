@@ -1,7 +1,7 @@
 
 #include <sys/queue.h>
 #include <time.h>
-#include"buddy-queue.h"
+#include "buddy-queue.h"
 struct process
 {
     struct processData data;
@@ -41,11 +41,12 @@ int main(int argc, char *argv[])
     CIRCLEQ_INIT(&head_wait);
     wait_queue = &head_wait;
 
-
     quantum = atoi(argv[1]);
     remaining_quantum_time = quantum;
+
     initialise();
     initClk();
+
     while (1)
     {
         if (ready_queue_size > 0)
@@ -58,8 +59,6 @@ int main(int argc, char *argv[])
         }
         else
         {
-            printf("at T = %d getting new processes\n", getClk());
-            fflush(stdout);
             get_new_processes();
         }
     }
@@ -84,14 +83,12 @@ void schedule_process()
     }
 
     useful_seconds++;
-    printf("la\n");
     down(sem1_process);
-    printf("3a\n");
-    current_process->data.remainingtime--;
+    current_process->data.remainingTime--;
 
     no_more_new_processes ? 0 : get_new_processes();
 
-    if (current_process->data.remainingtime == 0)
+    if (current_process->data.remainingTime == 0)
     {
         up(sem2_process);
         remove_process(current_process);
@@ -116,12 +113,12 @@ void schedule_process()
 
 void start_process(struct process *p)
 {
-    p->data.wait += getClk() - p->data.arrivaltime;
+    p->data.wait += getClk() - p->data.arrivalTime;
     int pid = fork();
     if (pid == 0)
     {
         char arg[10];
-        sprintf(arg, "%d", p->data.runningtime);
+        sprintf(arg, "%d", p->data.runningTime);
         int ret = execl("process", "process", arg, NULL);
         perror("Error in execl: ");
         exit(-1);
@@ -136,8 +133,7 @@ void start_process(struct process *p)
 
 void resume_process(struct process *p)
 {
-    printf("resuming process %d\n", p->data.id);
-    p->data.wait += getClk() - p->data.last_run;
+    p->data.wait += getClk() - p->data.lastRun;
     if (p->data.status != RUNNING)
     {
         p->data.status = RUNNING;
@@ -149,19 +145,18 @@ void resume_process(struct process *p)
 
 void stop_process(struct process *p)
 {
-    printf("stopping process %d\n", p->data.id);
     kill(p->data.pid, SIGSTOP) == -1 ? perror("Error in stop_process: ") : 0;
     p->data.status = STOPPED;
-    p->data.last_run = getClk();
+    p->data.lastRun = getClk();
     wait_on_process(p);
 }
 
 void remove_process(struct process *p)
 {
-    printf("removing process %d\n", p->data.id);
-    fflush(stdout);
     p->data.status = FINISHED;
     wait_on_process(p);
+
+    //remove process from memory and queue and check if there is a process in wait queue allocate it if the space in memory allowing
     deallocation(p->data.id);
     struct process *np = (struct process *)malloc(sizeof(struct process));
     if (ready_queue_size > 1)
@@ -174,26 +169,39 @@ void remove_process(struct process *p)
     }
     CIRCLEQ_REMOVE(ready_queue, p, ptrs);
     ready_queue_size--;
-    CIRCLEQ_FOREACH(np, &head_wait, ptrs)
-    if (allocation(&np->data))
-    {       
-            np->data.wait=getClk()-np->data.arrivaltime;
-            if (CIRCLEQ_EMPTY(ready_queue))
+    if (wait_queue_size > 0)
+    {
+        CIRCLEQ_FOREACH(np, &head_wait, ptrs)
+        {
+            if (allocation(&np->data))
             {
-                CIRCLEQ_INSERT_HEAD(ready_queue, np, ptrs);
-                current_process = np;
-                //printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), np->data.id);
-                fflush(stdout);
+                struct process *p = (struct process *)malloc(sizeof(struct process));
+                p->data.id = np->data.id;
+                p->data.arrivalTime = np->data.arrivalTime;
+                p->data.lastRun = getClk();
+                p->data.priority = np->data.priority;
+                p->data.runningTime = np->data.runningTime;
+                p->data.remainingTime = np->data.runningTime;
+                p->data.status = READY;
+                p->data.wait = 0;
+                p->data.size = np->data.size;
+                p->data.wait = getClk() - np->data.arrivalTime;
+                
+                if (CIRCLEQ_EMPTY(ready_queue))
+                {
+                    CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
+                    current_process = p;
+
+                }
+                else
+                {
+                    CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
+                }
+                ready_queue_size += 1;
+                CIRCLEQ_REMOVE(&head_wait, np, ptrs);
+                wait_queue_size -= 1;
             }
-            else
-            {
-                CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, np, ptrs);
-                printf("at T = %d process %d arrived\n", getClk(), np->data.id);
-                fflush(stdout);
-            }
-            ready_queue_size += 1;
-            CIRCLEQ_REMOVE(&head_wait, np, ptrs);
-            wait_queue_size-=1;
+        }
     }
 }
 
@@ -216,37 +224,34 @@ void get_new_processes()
         }
 
         p->data.id = shmaddr_pg->id;
-        p->data.arrivaltime = shmaddr_pg->arrivaltime;
-        p->data.last_run = getClk();
+        p->data.arrivalTime = shmaddr_pg->arrivalTime;
+        p->data.lastRun = getClk();
         p->data.priority = shmaddr_pg->priority;
-        p->data.runningtime = shmaddr_pg->runningtime;
-        p->data.remainingtime = shmaddr_pg->runningtime;
+        p->data.runningTime = shmaddr_pg->runningTime;
+        p->data.remainingTime = shmaddr_pg->runningTime;
         p->data.status = READY;
         p->data.wait = 0;
-        p->data.size=shmaddr_pg->size;
-     
-        if(allocation(&p->data)){
+        p->data.size = shmaddr_pg->size;
+
+        //check if there is a space in memory allocate it and put in in the ready queue else put it in wait queue
+        if (allocation(&p->data))
+        {
             if (CIRCLEQ_EMPTY(ready_queue))
             {
                 CIRCLEQ_INSERT_HEAD(ready_queue, p, ptrs);
                 current_process = p;
-                //printf("at T = %s, CLK = %d process %d arrived\n", getRealTime(),getClk(), p->data.id);
-                fflush(stdout);
             }
             else
             {
                 CIRCLEQ_INSERT_BEFORE(ready_queue, current_process, p, ptrs);
-                printf("at T = %d process %d arrived\n", getClk(), p->data.id);
-                fflush(stdout);
             }
             ready_queue_size += 1;
         }
-        else{
-            
+        else
+        {
+
             CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
-            printf("at T = %d process %d arrived and waited\n", getClk(), p->data.id);
-            fflush(stdout);
-            wait_queue_size+= 1;
+            wait_queue_size += 1;
         }
         up(sem2);
     }

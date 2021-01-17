@@ -1,5 +1,4 @@
 #include "headers.h"
-// #include "circular.h"
 #include "P_Q.h"
 #include <time.h>
 #include <sys/queue.h>
@@ -20,10 +19,12 @@ void wait_next_clk();
 void resume_process(struct processData *p);
 void stop_process(struct processData *p);
 void remove_process(struct processData *p);
+
 FILE *logptr;
 struct circlehead head_wait;
 struct processData *Head;
 struct processData *Current_Process;
+
 bool Finished_Processes = false;
 int wait_queue_size = 0;
 int main(int argc, char *argv[])
@@ -32,9 +33,9 @@ int main(int argc, char *argv[])
     initialize_ipc();
     CIRCLEQ_INIT(&head_wait);
     wait_queue = &head_wait;
+
     Head = New_Process(0, 0, 0, 0);
     Current_Process = New_Process(0, 0, 0, 0);
-    //Current_Process=NULL;
 
     initClk();
     while (1)
@@ -52,38 +53,33 @@ int main(int argc, char *argv[])
             start_process(Head);
             down(sem1_process);
             useful_seconds++;
-            Current_Process->remainingtime--;
+            Current_Process->remainingTime--;
             Current_Process->priority--;
         }
-        else if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingtime != 0)
+        else if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingTime != 0)
         {
             down(sem1_process);
             useful_seconds++;
-            Current_Process->remainingtime--;
+            Current_Process->remainingTime--;
             Current_Process->priority--;
         }
-        else if (Head->status == STOPPED && Head->remainingtime != 0)
+        else if (Head->status == STOPPED && Head->remainingTime != 0)
         {
-            printf("here \n");
-            fflush(stdout);
             reset(sem2_process);
             resume_process(Head);
             useful_seconds++;
             down(sem1_process);
-            Current_Process->remainingtime--;
+            Current_Process->remainingTime--;
             Current_Process->priority--;
         }
 
-        if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingtime == 0)
+        if ((Current_Process->status == STARTED || Current_Process->status == RESUMED) && Current_Process->remainingTime == 0)
         {
             up(sem2_process);
             remove_process(Current_Process);
-            printf("Finished_Processes %d Head->priority %d Current_Process->priority %d \n", Finished_Processes, Head->priority, Current_Process->priority);
-            fflush(stdout);
         }
         if (Finished_Processes == true && Head->priority == 0 && Current_Process->priority == 0)
         {
-            printf("5ls");
             generate_perf_file();
             exit(0);
         }
@@ -95,14 +91,14 @@ int main(int argc, char *argv[])
 void start_process(struct processData *pr)
 {
     Current_Process->id = pr->id;
-    Current_Process->priority = pr->remainingtime;
-    Current_Process->arrivaltime = pr->arrivaltime;
-    Current_Process->runningtime = pr->runningtime;
-    Current_Process->remainingtime = pr->remainingtime;
-    Current_Process->last_run = pr->last_run;
+    Current_Process->priority = pr->remainingTime;
+    Current_Process->arrivalTime = pr->arrivalTime;
+    Current_Process->runningTime = pr->runningTime;
+    Current_Process->remainingTime = pr->remainingTime;
+    Current_Process->lastRun = pr->lastRun;
     Current_Process->pid = pr->pid;
     Current_Process->status = pr->status;
-    // Current_Process = &pr;
+
     Dequeue(&pr);
     Head = *&pr;
 
@@ -111,12 +107,12 @@ void start_process(struct processData *pr)
         Head = New_Process(0, 0, 0, 0);
     }
 
-    Current_Process->wait += getClk() - Current_Process->arrivaltime;
+    Current_Process->wait += getClk() - Current_Process->arrivalTime;
     int pid = fork();
     if (pid == 0)
     {
         char arg[10];
-        sprintf(arg, "%d", Current_Process->runningtime);
+        sprintf(arg, "%d", Current_Process->runningTime);
         int ret = execl("process", "process", arg, NULL);
         perror("Error in execl: ");
         exit(-1);
@@ -132,22 +128,21 @@ void start_process(struct processData *pr)
 void resume_process(struct processData *p)
 {
     Current_Process->id = p->id;
-    Current_Process->priority = p->remainingtime;
-    Current_Process->arrivaltime = p->arrivaltime;
-    Current_Process->runningtime = p->runningtime;
-    Current_Process->remainingtime = p->remainingtime;
-    Current_Process->last_run = p->last_run;
+    Current_Process->priority = p->remainingTime;
+    Current_Process->arrivalTime = p->arrivalTime;
+    Current_Process->runningTime = p->runningTime;
+    Current_Process->remainingTime = p->remainingTime;
+    Current_Process->lastRun = p->lastRun;
     Current_Process->pid = p->pid;
     Current_Process->status = p->status;
-    //Current_Process = &p;
+
     Dequeue(&p);
     Head = *&p;
 
     if (Is_Empty(&Head))
     {
         Head = New_Process(0, 0, 0, 0);
-        printf("head priority in resume empty %d \n", Head->priority);
-        fflush(stdout);
+
     }
     if (kill(Current_Process->pid, SIGCONT) == -1)
     {
@@ -156,7 +151,7 @@ void resume_process(struct processData *p)
     }
 
     Current_Process->status = RESUMED;
-    Current_Process->wait += getClk() - Current_Process->last_run;
+    Current_Process->wait += getClk() - Current_Process->lastRun;
     log_status(Current_Process, "resumed");
 }
 
@@ -168,10 +163,9 @@ void stop_process(struct processData *p)
         exit(-1);
     }
     p->status = STOPPED;
-    p->last_run = getClk();
-    // p->remainingtime--;
+    p->lastRun = getClk();
 
-    if (p->remainingtime != 0)
+    if (p->remainingTime != 0)
     {
         log_status(p, "stopped");
     }
@@ -189,11 +183,12 @@ void remove_process(struct processData *Pr)
         perror("Error in kill: ");
         exit(-1);
     }
-    //printf("batee5 fl remove\n");
+
     Pr->status = FINISHED;
-    Pr->last_run = getClk();
+    Pr->lastRun = getClk();
     log_status(Pr, "finished");
-    printf("%d in delation\n", Pr->priority);
+
+    //removing process from memory after finishing and look if there is a process in wait queue and allocate it if there is enough space in memory
     deallocation(Pr->id);
     struct processData *temp = (struct processData *)malloc(sizeof(struct processData));
     struct process *np = (struct process *)malloc(sizeof(struct process));
@@ -201,106 +196,71 @@ void remove_process(struct processData *Pr)
     {
         if (allocation(&np->data))
         {
-            np->data.wait = getClk() - np->data.arrivaltime;
-            // fadel el SIZE wel WAIT
+            np->data.wait = getClk() - np->data.arrivalTime;
             if (Head->priority == 0)
             {
-                Head = New_Process(np->data.arrivaltime, np->data.runningtime, np->data.runningtime, np->data.id);
-                printf("after enqueue %d \n", Head->id);
+                Head = New_Process(np->data.arrivalTime, np->data.runningTime, np->data.runningTime, np->data.id);
             }
             else
             {
-                temp = New_Process(np->data.arrivaltime, np->data.runningtime, np->data.runningtime, np->data.id);
-                printf("before enque %d \n", np->data.id);
+                temp = New_Process(np->data.arrivalTime, np->data.runningTime, np->data.runningTime, np->data.id);
                 Enqueue(&Head, &temp);
-                printf("%d in creation\n", temp->id);
             }
-        //     if (Head->priority < Current_Process->priority)
-        //     {
-        //     // printf("current status %d \n",Current_Process->status);
-        //     stop_process(Current_Process);
-        //     // printf("current status %d current remaning time %d \n",Current_Process->status,Current_Process->remainingtime);
-        //     // fflush(stdout);
-        //     if (Current_Process->remainingtime != 0)
-        //     {
-        //         printf("current status %d current remaning time %d \n", Current_Process->status, Current_Process->remainingtime);
-        //         fflush(stdout);
-        //         Current_Process->priority = Current_Process->remainingtime;
-        //         Enqueue(&Head, &Current_Process);
-        //         printf("Head status %dHead remaning time %d \n", Head->status, Head->remainingtime);
-        //         fflush(stdout);
-        //         printf("Next status %d Next remaning time %d \n", Head->Next->status, Head->Next->priority);
-        //         fflush(stdout);
-        //     }
-        //     Current_Process = New_Process(0, 0, 0, 0);
-        // }
+            if (Head->priority < Current_Process->priority)
+            {
+            stop_process(Current_Process);
+            if (Current_Process->remainingTime != 0)
+            {
+                Current_Process->priority = Current_Process->remainingTime;
+                Enqueue(&Head, &Current_Process);
+            }
+            Current_Process = New_Process(0, 0, 0, 0);
+        }
 
             CIRCLEQ_REMOVE(&head_wait, np, ptrs);
             wait_queue_size -= 1;
         }
     }
-    //Dequeue(&Pr);
     free(Current_Process);
     Current_Process = New_Process(0, 0, 0, 0);
-
-    fflush(stdout);
-    //free(temp);
 }
 void check_for_new_processes()
 {
     while (1)
     {
         down(sem1);
-        printf("SRTN: downed sem1\n");
-        fflush(stdout);
         struct processData *pr = (struct processData *)malloc(sizeof(struct processData));
         if (shmaddr_pg->id == -2)
         {
             up(sem2);
-            printf("SRTN: upped sem2 id = -2\n");
-            fflush(stdout);
             Finished_Processes = true;
             return;
         }
         if (shmaddr_pg->id == -1)
         {
             up(sem2);
-            printf("SRTN: upped sem2 id = -1\n");
-            fflush(stdout);
             return;
         }
-       if (allocation(shmaddr_pg))
+        //checking if there is a space in memory then allocate the process and put it in priority queue else put the process in wait queue
+        if (allocation(shmaddr_pg))
         {
             if (Head->priority == 0)
             {
-                Head = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->runningtime, shmaddr_pg->runningtime, shmaddr_pg->id);
-                printf("after enqueue %d \n", Head->id);
+                Head = New_Process(shmaddr_pg->arrivalTime, shmaddr_pg->runningTime, shmaddr_pg->runningTime, shmaddr_pg->id);
             }
             else
             {
-                pr = New_Process(shmaddr_pg->arrivaltime, shmaddr_pg->runningtime, shmaddr_pg->runningtime, shmaddr_pg->id);
-                printf("before enque %d \n", pr->id);
+                pr = New_Process(shmaddr_pg->arrivalTime, shmaddr_pg->runningTime, shmaddr_pg->runningTime, shmaddr_pg->id);
                 Enqueue(&Head, &pr);
-                printf("%d in creation\n", Head->priority);
             }
         
-
             if (Head->priority < Current_Process->priority)
             {
-                // printf("current status %d \n",Current_Process->status);
                 stop_process(Current_Process);
-                // printf("current status %d current remaning time %d \n",Current_Process->status,Current_Process->remainingtime);
-                // fflush(stdout);
-                if (Current_Process->remainingtime != 0)
+                if (Current_Process->remainingTime != 0)
                 {
-                    printf("current status %d current remaning time %d \n", Current_Process->status, Current_Process->remainingtime);
-                    fflush(stdout);
-                    Current_Process->priority = Current_Process->remainingtime;
+                    Current_Process->priority = Current_Process->remainingTime;
                     Enqueue(&Head, &Current_Process);
-                    printf("Head status %dHead remaning time %d \n", Head->status, Head->remainingtime);
-                    fflush(stdout);
-                    printf("Next status %d Next remaning time %d \n", Head->Next->status, Head->Next->priority);
-                    fflush(stdout);
                 }
                 Current_Process = New_Process(0, 0, 0, 0);
             }
@@ -309,24 +269,18 @@ void check_for_new_processes()
         {
             struct process *p = (struct process *)malloc(sizeof(struct process));
             p->data.id = shmaddr_pg->id;
-            p->data.arrivaltime = shmaddr_pg->arrivaltime;
-            p->data.last_run = getClk();
-            p->data.priority = shmaddr_pg->runningtime;
-            p->data.runningtime = shmaddr_pg->runningtime;
-            p->data.remainingtime = shmaddr_pg->runningtime;
+            p->data.arrivalTime = shmaddr_pg->arrivalTime;
+            p->data.lastRun = getClk();
+            p->data.priority = shmaddr_pg->runningTime;
+            p->data.runningTime = shmaddr_pg->runningTime;
+            p->data.remainingTime = shmaddr_pg->runningTime;
             p->data.status = READY;
             p->data.wait = 0;
             p->data.size = shmaddr_pg->size;
             CIRCLEQ_INSERT_TAIL(wait_queue, p, ptrs);
-            printf("at T = %d process %d arrived and waited\n", getClk(), p->data.id);
-            fflush(stdout);
             wait_queue_size += 1;
         }
-
-        printf("%d in creation\n", Head->priority);
         up(sem2);
-        printf("SRTN: upped sem2\n");
-        fflush(stdout);
     }
 }
 

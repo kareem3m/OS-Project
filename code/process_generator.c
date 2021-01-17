@@ -35,10 +35,9 @@ struct queue *readFile(struct queue *pt, char path[])
     fgets(buffer, bufferLength, filePointer);
     while (fgets(buffer, bufferLength, filePointer))
     {
-        int id, arrivaltime, runningtime, priority;
-        sscanf(buffer, "%d\t%d\t%d\t%d\t%d\n", &p.id, &p.arrivaltime, &p.runningtime, &p.priority, &p.size);
+        int id, arrivalTime, runningTime, priority;
+        sscanf(buffer, "%d\t%d\t%d\t%d\t%d\n", &p.id, &p.arrivalTime, &p.runningTime, &p.priority, &p.size);
         enqueue(pt, p);
-        printf("%d\t%d\t%d\t%d\t%d\n", p.id, p.arrivaltime, p.runningtime, p.priority, p.size);
     }
     fclose(filePointer);
     return pt;
@@ -70,8 +69,6 @@ int main(int argc, char *argv[])
     scanf("%d", &schedulingAlgorithm);
     printf("Please enter the quantum for RR or 0 if not:\n");
     scanf("%d", &quantam);
-    printf("quantam %d \n",quantam);
-    printf("pid: %d\n", getpid());
 
     initialize_ipc();
 
@@ -102,7 +99,6 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    printf("\nReader: Shared memory attached at address %d\n", scheduler_id);
 
     scheduler_id = fork();
     if (scheduler_id == -1)
@@ -112,7 +108,6 @@ int main(int argc, char *argv[])
     if (scheduler_id == 0)
     {
         int ret;
-        printf("pid: %d ppid: %d\n", getpid(), getppid());
         if (schedulingAlgorithm == 1)
         {
             ret = execl("HPF", "HPF", NULL);
@@ -127,7 +122,6 @@ int main(int argc, char *argv[])
             sprintf(arg, "%d", quantam);
             ret = execl("RR", "RR", arg, NULL);
         }
-        printf("%d\n", ret);
     }
     else
     {
@@ -139,17 +133,9 @@ int main(int argc, char *argv[])
         }
         if (clk_id == 0)
         {
-            printf("pid: %d ppid: %d\n", getpid(), getppid());
             execl("clk", "clk", NULL);
         }
     }
-    // 3. Initiate and create the scheduler and clock processes.
-    // 4. Use this function after creating the clock process to initialize clock
-    // To get time use this
-    //int x = getClk();
-    // TODO Generation Main Loop
-    // 5. Create a data structure for processes and provide it with its parameters.
-    // 6. Send the information to the scheduler at the appropriate time.
     initClk();
     raise(SIGUSR1);
 
@@ -164,7 +150,7 @@ int main(int argc, char *argv[])
 
 void on_clock_tick(int signum)
 {
-    while (!isEmpty(pData) && front(pData).arrivaltime <= getClk())
+    while (!isEmpty(pData) && front(pData).arrivalTime <= getClk())
     {
         *shmaddr_pg = front(pData);
         up(sem1);

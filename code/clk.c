@@ -14,14 +14,12 @@ int shmid;
 void cleanup(int signum)
 {
     shmctl(shmid, IPC_RMID, NULL);
-    printf("Clock terminating!\n");
     exit(0);
 }
 
 /* This file represents the system clock for ease of calculations */
 int main(int argc, char *argv[])
 {
-    printf("Clock starting\n");
     signal(SIGINT, cleanup);
     int clk = 0;
     //Create shared memory for one integer variable 4 bytes
@@ -40,7 +38,6 @@ int main(int argc, char *argv[])
     *shmaddr = clk; /* initialize shared memory */
     while (1)
     {
-        // printf("CLOCK >>>>>>>>>>>>>>> Time = %s, CLK = %d\n", getRealTime(), *shmaddr);
         sleep(1);
         (*shmaddr)++;
         kill(getppid(), SIGUSR1);
