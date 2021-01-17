@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
             up(sem2_process);
             remove_process(currentProcess);
         }
-        if (currentProcess == true && Head->priority == 0 && currentProcess->priority == 0)
+        if (finishedProcesses == true && Head->priority == 0 && currentProcess->priority == 0)
         {
             generate_perf_file();
             exit(0);
