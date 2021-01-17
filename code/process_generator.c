@@ -3,14 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/queue.h>
-#include "circular.h"
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <signal.h>
 #include <string.h>
 
-void wait_next_clk();
 void clearResources(int);
+void on_clock_tick(int signum);
 
 struct queue *readFile(struct queue *pt, char path[])
 {
@@ -36,10 +35,9 @@ struct queue *readFile(struct queue *pt, char path[])
     fgets(buffer, bufferLength, filePointer);
     while (fgets(buffer, bufferLength, filePointer))
     {
-        int id, arrivaltime, runningtime, priority;
-        sscanf(buffer, "%d\t%d\t%d\t%d\n", &p.id, &p.arrivaltime, &p.runningtime, &p.priority);
+        int id, arrivalTime, runningTime, priority;
+        sscanf(buffer, "%d\t%d\t%d\t%d\n", &p.id, &p.arrivalTime, &p.runningTime, &p.priority);
         enqueue(pt, p);
-        printf("%d\t%d\t%d\t%d\n", p.id, p.arrivaltime, p.runningtime, p.priority);
     }
     fclose(filePointer);
     return pt;
@@ -47,23 +45,20 @@ struct queue *readFile(struct queue *pt, char path[])
 
 struct msgbuff;
 /* arg for semctl system calls. */
-union Semun
-{
-    int val;               /* value for SETVAL */
-    struct semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
-    ushort *array;         /* array for GETALL & SETALL */
-    struct seminfo *__buf; /* buffer for IPC_INFO */
-    void *__pad;
-};
 
-pid_t scheduler_id, clk_id;
+
+pid_t schedulerID, clkID;
+
+bool end = false;
+
+struct queue *pData;
 
 int main(int argc, char *argv[])
 {
+    signal(SIGUSR1, on_clock_tick);
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
-    struct queue *pData;
     char path[] = "processes.txt";
 
     pData = readFile(pData, path);
@@ -74,43 +69,10 @@ int main(int argc, char *argv[])
     scanf("%d", &schedulingAlgorithm);
     printf("Please enter the quantum for RR or 0 if not:\n");
     scanf("%d", &quantam);
-    printf("pid: %d\n", getpid());
 
-    int shmid, shmid2;
-    key_t key_id1, key_id2, key_id3, key_id4, key_id5;
-    key_id2 = ftok("keyfile", 66);
-    key_id4 = ftok("keyfile", 69);
-    key_id5 = ftok("keyfile", 70);
-    shmid = shmget(key_id2, sizeof(struct processData), IPC_CREAT | 0666);
-    struct processData *shmaddr = (struct processData *)shmat(shmid, (void *)0, 0);
+    initialize_ipc();
 
-    shmid2 = shmget(key_id5, sizeof(int), IPC_CREAT | 0666);
-
-    int *count = (int *)shmat(shmid2, (void *)0, 0);
-
-    if (shmaddr == (void*)-1)
-    {
-        perror("Error in attach in reader");
-        exit(-1);
-    }
-
-    if (count == (void*)-1)
-    {
-        perror("Error in attach in reader");
-        exit(-1);
-    }
     union Semun semun;
-    key_id3 = ftok("keyfile", 67);
-    key_id1 = ftok("keyfile", 68);
-
-    int sem1 = semget(key_id3, 1, 0666 | IPC_CREAT);
-    int sem2 = semget(key_id1, 1, 0666 | IPC_CREAT);
-    int sem3 = semget(key_id4, 1, 0666 | IPC_CREAT);
-    if (sem1 == -1 || sem2 == -1 || sem3 == -1)
-    {
-        perror("Error in create sem");
-        exit(-1);
-    }
 
     semun.val = 0; /* initial value of the semaphore, Binary semaphore */
     if (semctl(sem1, 0, SETVAL, semun) == -1)
@@ -124,100 +86,97 @@ int main(int argc, char *argv[])
         perror("Error in semctl");
         exit(-1);
     }
-    semun.val = 0; /* initial value of the semaphore, Binary semaphore */
-    if (semctl(sem3, 0, SETVAL, semun) == -1)
+    semun.val = 0;
+    if (semctl(sem1Process, 0, SETVAL, semun) == -1)
     {
         perror("Error in semctl");
         exit(-1);
     }
-    printf("\nReader: Shared memory attached at address %d\n", scheduler_id);
-    scheduler_id = fork();
-    if (scheduler_id == -1)
+    semun.val = 0;
+    if (semctl(sem2Process, 0, SETVAL, semun) == -1)
+    {
+        perror("Error in semctl");
+        exit(-1);
+    }
+
+
+    schedulerID = fork();
+    if (schedulerID == -1)
     {
         printf("There is an error while calling fork()");
     }
-    if (scheduler_id == 0)
+    if (schedulerID == 0)
     {
         int ret;
-        printf("pid: %d ppid: %d\n", getpid(), getppid());
-        char *args[] = {"2", "C", "Programming", NULL};
-        if(schedulingAlgorithm==1)
+        if (schedulingAlgorithm == 1)
         {
-         ret = execv("./HPF", args);
+            ret = execl("HPF", "HPF", NULL);
         }
-        else if(schedulingAlgorithm==2)
+        else if (schedulingAlgorithm == 2)
         {
-         ret = execv("./SRTN", args);
+            ret = execl("SRTN", "SRTN", NULL);
         }
         else
         {
-         ret = execv("./RR", args);
+            char arg[10];
+            sprintf(arg, "%d", quantam);
+            ret = execl("RR", "RR", arg, NULL);
         }
-        printf("%d\n", ret);
     }
     else
     {
-        clk_id = fork();
-        if (clk_id == -1)
+        //down(scheduler_ready);
+        clkID = fork();
+        if (clkID == -1)
         {
             printf("There is an error while calling fork()");
         }
-        if (clk_id == 0)
+        if (clkID == 0)
         {
-            printf("pid: %d ppid: %d\n", getpid(), getppid());
-            char *args[] = {"clock", "C", "Programming", NULL};
-            execv("./clk", args);
+            execl("clk", "clk", NULL);
         }
     }
-    // 3. Initiate and create the scheduler and clock processes.
-    // 4. Use this function after creating the clock process to initialize clock
     initClk();
-    // To get time use this
-    int x = getClk();
-    // TODO Generation Main Loop
-    // 5. Create a data structure for processes and provide it with its parameters.
-    // 6. Send the information to the scheduler at the appropriate time.
-    
-    while (1)
+    raise(SIGUSR1);
+
+    while (!end)
     {
-        x = getClk();
-        while (!isEmpty(pData) && front(pData).arrivaltime == x)
-        {
-            *shmaddr = front(pData);
-            up(sem1);
-            down(sem2);
-            dequeue(pData);
-        }
-        if(isEmpty(pData)){
-            shmaddr->id = -2;
-            up(sem1);
-            down(sem2);
-            break;
-        }
-        else{ 
-        shmaddr->id = -1;
-        up(sem1);
-        down(sem2);
-        }
-        wait_next_clk();
+        pause();
     }
-    
+    waitpid(schedulerID, NULL, 0);
     // 7. Clear clock resources
-    waitpid(scheduler_id,NULL, 0);
     destroyClk(true);
 }
 
-void wait_next_clk()
+void on_clock_tick(int signum)
 {
-    int start = getClk();
-    while (start == getClk())
-        ;
+    while (!isEmpty(pData) && front(pData).arrivalTime <= getClk())
+    {
+        *shmaddrPG = front(pData);
+        up(sem1);
+        down(sem2);
+        dequeue(pData);
+    }
+
+    if (isEmpty(pData))
+    {
+        signal(SIGUSR1, SIG_IGN);
+        end = true;
+        shmaddrPG->id = -2;
+        up(sem1);
+        down(sem2);
+    }
+    else
+    {
+        shmaddrPG->id = -1;
+        up(sem1);
+        down(sem2);
+    }
 }
 
 void clearResources(int signum)
 {
     //TODO Clears all resources in case of interruption
-    kill(clk_id, SIGKILL);
-    kill(scheduler_id, SIGKILL);
+    remove_ipc();
     exit(0);
 }

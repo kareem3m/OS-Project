@@ -1,22 +1,24 @@
 #include "headers.h"
-
+#include <time.h>
 /* Modify this file as needed*/
-int remainingtime;
+int remainingTime, t;
 
 int main(int agrc, char *argv[])
 {
+    initialize_ipc();
     initClk();
-    //TODO it needs to get the remaining time from somewhere
-    //remainingtime = ??;
 
-    remainingtime = atoi(argv[1]);
+    remainingTime = atoi(argv[1]); // get running time argument
 
-    while (remainingtime > 0)
+    while (remainingTime > 0)
     {
-        //printf("%d: process %d alive, remaining time = %d\n", getClk(), getpid(), remainingtime);
-        int start = getClk();
-        while(start == getClk());
-        remainingtime--;
+        t = getClk();
+        while (t == getClk())
+        {
+        };
+        remainingTime--;
+        up(sem1Process);
+        down(sem2Process);
     }
 
     destroyClk(false);
